@@ -35,8 +35,37 @@ FetchContent_Declare(httplib
 )
 FetchContent_MakeAvailable(miniaudio httplib)
 
-# Application sources are listed explicitly here; add new .cpp files to this
-# list when they land (see capture/AGENTS.md).
+# Warnings affect application code; no global -Werror or vendor flag changes.
+function(radar_apply_warnings target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /permissive- /Zc:__cplusplus)
+        target_compile_definitions(${target} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endfunction()
+
+# Core sources are listed explicitly here; add new .cpp files when they land
+# (see capture/AGENTS.md).
+set(RADAR_CAPTURE_CORE_SOURCES
+    src/spsc_ring.cpp
+    src/resampler.cpp
+    src/chunker.cpp
+)
+
+add_library(radar_capture_core STATIC ${RADAR_CAPTURE_CORE_SOURCES})
+target_compile_features(radar_capture_core PUBLIC cxx_std_20)
+set_target_properties(radar_capture_core PROPERTIES CXX_EXTENSIONS OFF)
+target_include_directories(radar_capture_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(radar_capture_core SYSTEM PRIVATE "${miniaudio_SOURCE_DIR}")
+# miniaudio_common_options supplies its upstream platform link dependencies.
+target_link_libraries(radar_capture_core
+    PUBLIC miniaudio miniaudio_common_options Threads::Threads
+)
+radar_apply_warnings(radar_capture_core)
+
+# Application sources are listed explicitly here; add new .cpp files when they
+# land (see capture/AGENTS.md).
 set(RADAR_CAPTURE_SOURCES
     src/main.cpp
 )
@@ -47,23 +76,11 @@ set_target_properties(radar_capture PROPERTIES
     CXX_EXTENSIONS OFF
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
-target_include_directories(radar_capture PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_include_directories(radar_capture SYSTEM PRIVATE "${miniaudio_SOURCE_DIR}")
-# miniaudio_common_options supplies its upstream platform link dependencies.
 target_link_libraries(radar_capture PRIVATE
-    miniaudio
-    miniaudio_common_options
+    radar_capture_core
     httplib::httplib
-    Threads::Threads
 )
-
-# Warnings affect application code; no global -Werror or vendor flag changes.
-if(MSVC)
-    target_compile_options(radar_capture PRIVATE /W4 /permissive- /Zc:__cplusplus)
-    target_compile_definitions(radar_capture PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(radar_capture PRIVATE -Wall -Wextra -Wpedantic)
-endif()
+radar_apply_warnings(radar_capture)
 
 # Add tests in capture/tests/CMakeLists.txt when actual tests exist.
 include(CTest)
