@@ -33,7 +33,17 @@ FetchContent_Declare(httplib
     URL_HASH SHA256=18064587e0cc6a0d5d56d619f4cbbcaba47aa5d84d86013abbd45d95c6653866
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
-FetchContent_MakeAvailable(miniaudio httplib)
+
+# Header-only JSON for heartbeat request/response only. HTTPS is still not
+# needed: cloud calls belong to Python.
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+set(JSON_Install OFF CACHE INTERNAL "")
+FetchContent_Declare(nlohmann_json
+    URL https://codeload.github.com/nlohmann/json/tar.gz/refs/tags/v3.11.3
+    URL_HASH SHA256=0d8ef5af7f9794e3263480193c491549b2ba6cc74bb018906202ada498a79406
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(miniaudio httplib nlohmann_json)
 
 # Warnings affect application code; no global -Werror or vendor flag changes.
 function(radar_apply_warnings target)
@@ -51,6 +61,15 @@ set(RADAR_CAPTURE_CORE_SOURCES
     src/spsc_ring.cpp
     src/resampler.cpp
     src/chunker.cpp
+    src/time_util.cpp
+    src/uuid_util.cpp
+    src/url_util.cpp
+    src/chunk_queue.cpp
+    src/capture_device.cpp
+    src/http_sender.cpp
+    src/heartbeat_client.cpp
+    src/capture_pipeline.cpp
+    src/supervisor.cpp
 )
 
 add_library(radar_capture_core STATIC ${RADAR_CAPTURE_CORE_SOURCES})
@@ -60,7 +79,8 @@ target_include_directories(radar_capture_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR
 target_include_directories(radar_capture_core SYSTEM PRIVATE "${miniaudio_SOURCE_DIR}")
 # miniaudio_common_options supplies its upstream platform link dependencies.
 target_link_libraries(radar_capture_core
-    PUBLIC miniaudio miniaudio_common_options Threads::Threads
+    PUBLIC miniaudio miniaudio_common_options Threads::Threads httplib::httplib
+           nlohmann_json::nlohmann_json
 )
 radar_apply_warnings(radar_capture_core)
 
@@ -76,10 +96,7 @@ set_target_properties(radar_capture PROPERTIES
     CXX_EXTENSIONS OFF
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
-target_link_libraries(radar_capture PRIVATE
-    radar_capture_core
-    httplib::httplib
-)
+target_link_libraries(radar_capture PRIVATE radar_capture_core)
 radar_apply_warnings(radar_capture)
 
 # Add tests in capture/tests/CMakeLists.txt when actual tests exist.

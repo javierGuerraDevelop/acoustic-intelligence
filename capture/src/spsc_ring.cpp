@@ -70,4 +70,17 @@ void SpscRing::reset() noexcept {
     write_index_.store(0, std::memory_order_relaxed);
 }
 
+void SpscRing::notify() noexcept {
+    signal_.fetch_add(1, std::memory_order_release);
+    signal_.notify_all();
+}
+
+std::uint32_t SpscRing::signal_value() const noexcept {
+    return signal_.load(std::memory_order_acquire);
+}
+
+void SpscRing::wait_for_data(std::uint32_t seen) const {
+    signal_.wait(seen, std::memory_order_acquire);
+}
+
 }  // namespace radar

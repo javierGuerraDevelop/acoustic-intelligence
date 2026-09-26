@@ -43,6 +43,15 @@ public:
     // Not thread-safe: call only while producer and consumer are stopped.
     void reset() noexcept;
 
+    // Wake-up signal for a sleeping consumer. The producer calls notify()
+    // (lock-free, safe from the audio callback); the consumer snapshots
+    // signal_value() and passes it to wait_for_data(). A notification racing
+    // between the snapshot and the wait is not lost because wait observes the
+    // changed value and returns immediately.
+    void notify() noexcept;
+    std::uint32_t signal_value() const noexcept;
+    void wait_for_data(std::uint32_t seen) const;
+
 private:
     static std::size_t round_up_power_of_two(std::size_t value);
 
@@ -51,6 +60,7 @@ private:
     std::size_t mask_ = 0;
     alignas(64) std::atomic<std::uint64_t> write_index_{0};
     alignas(64) std::atomic<std::uint64_t> read_index_{0};
+    alignas(64) mutable std::atomic<std::uint32_t> signal_{0};
 };
 
 }  // namespace radar

@@ -16,7 +16,10 @@ inline constexpr std::size_t kWireChunkFrames = static_cast<std::size_t>(kWireSa
 inline constexpr std::size_t kWireChunkBytes = kWireChunkFrames * kWireBytesPerSample;
 
 // Ring holds four seconds at the actual capture rate (set by the device).
+// The ring is preallocated for the highest supported source rate, so any
+// device at or below that rate still gets its full four seconds.
 inline constexpr int kSourceRingSeconds = 4;
+inline constexpr int kMaxSupportedSourceRateHz = 96000;
 // Sender queue holds at most two completed chunks; oldest pending drops.
 inline constexpr std::size_t kSenderQueueMaxChunks = 2;
 

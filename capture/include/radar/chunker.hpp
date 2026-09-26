@@ -18,6 +18,9 @@ struct AudioChunk {
     std::chrono::system_clock::time_point captured_at{};  // first sample, UTC
     float rms_dbfs = kRmsFloorDbfs;
     std::uint64_t dropped_frames_total = 0;
+    // Canonical 36-character UUID text plus terminator; filled by the pipeline
+    // when the chunk is finalized.
+    std::array<char, 37> stream_id{};
     std::array<std::uint8_t, kWireChunkBytes> pcm{};
 };
 

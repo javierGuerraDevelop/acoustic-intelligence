@@ -3,6 +3,8 @@ set(RADAR_CAPTURE_TESTS
     test_spsc_ring
     test_resampler
     test_chunker
+    test_chunk_queue
+    test_time_util
 )
 
 foreach(test_name IN LISTS RADAR_CAPTURE_TESTS)
