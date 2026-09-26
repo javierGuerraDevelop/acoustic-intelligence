@@ -1,3 +1,9 @@
+cmake_minimum_required(VERSION 3.24)
+project(radar_capture LANGUAGES C CXX)
+
+include(FetchContent)
+find_package(Threads REQUIRED)
+
 # Build miniaudio's own implementation once; application code should just
 # include <miniaudio.h>, without defining MINIAUDIO_IMPLEMENTATION.
 set(MINIAUDIO_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -28,6 +34,12 @@ FetchContent_Declare(httplib
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(miniaudio httplib)
+
+# Application sources are listed explicitly here; add new .cpp files to this
+# list when they land (see capture/AGENTS.md).
+set(RADAR_CAPTURE_SOURCES
+    src/main.cpp
+)
 
 add_executable(radar_capture ${RADAR_CAPTURE_SOURCES})
 target_compile_features(radar_capture PRIVATE cxx_std_20)
