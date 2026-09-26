@@ -6,9 +6,11 @@ For rules shared across the whole repo (secrets, branching, parallel agents,
 handoff), see the root AGENTS.md — this file covers capture/C++ specifics only.
 
 ## Stack
-- C++20; CMake 3.24+; miniaudio and cpp-httplib, pinned in CMake.
-- Compiler/toolchain: [compiler and version used by the team].
-- Format: repository .clang-format; tests: [chosen framework], run through CTest.
+- C++20; CMake 3.24+; miniaudio, cpp-httplib and nlohmann/json, pinned in CMake.
+- Compiler/toolchain: verified GCC 15.2.0 MinGW-w64 on Windows 11 x64 with
+  CMake 4.2.3; MSVC is the intended demo toolchain but is unverified here.
+- Format: repository .clang-format; tests: minimal in-repo assertion harness
+  (capture/tests/test_util.hpp), registered through CTest.
 - C++ captures/resamples audio; Python performs local inference.
 
 ## Project structure

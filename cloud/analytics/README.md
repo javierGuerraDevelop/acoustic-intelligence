@@ -75,6 +75,14 @@ Live account check (needs credentials; see `sql/README.md`):
 python -m cloud.analytics.selftest
 ```
 
+## Label boundary
+
+The adapter accepts only the canonical `knock`/`doorbell` labels from M2's
+event projection; anything else is a terminal `BAD_INPUT` before SQL runs. The
+downloaded YAMNet class map (`Knock`, `Doorbell`, `Ding-dong`) and its mapping
+into those two classes stay in M2's inference contract. No model or class map
+is created, copied or downloaded here.
+
 ## Account status
 
 At the time of this commit no Snowflake credentials are present in the
