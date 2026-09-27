@@ -61,6 +61,10 @@ class SoundClassifier:
             self.rules.reset_continuity()
         return self.rules.evaluate(self.score(audio))
 
+    def reset_continuity(self):
+        """Clear window smoothing after a gap, pause or stream change."""
+        self.rules.reset_continuity()
+
 
 # Preserve the original import for existing callers.
 soundClassifier = SoundClassifier
