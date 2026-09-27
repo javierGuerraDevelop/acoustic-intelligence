@@ -11,13 +11,21 @@ import type { EventHistoryItem } from "@/types/contracts"
 interface LatestDetectionProps {
   item?: EventHistoryItem
   isAcknowledging: boolean
+  speechEnabled: boolean
+  isGeneratingSpeech: boolean
+  isPlayingSpeech: boolean
   onAcknowledge: (eventId: string) => void
+  onSpeak: (eventId: string) => void
 }
 
 export function LatestDetection({
   item,
   isAcknowledging,
+  speechEnabled,
+  isGeneratingSpeech,
+  isPlayingSpeech,
   onAcknowledge,
+  onSpeak,
 }: LatestDetectionProps) {
   const event = item?.event
   const acknowledged = item?.acknowledged_at !== null
@@ -30,7 +38,7 @@ export function LatestDetection({
 
       <CardContent>
         {event ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div>
               <p className="text-2xl font-semibold">
                 {event.label === "knock"
@@ -43,7 +51,7 @@ export function LatestDetection({
               </p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Badge>{event.severity}</Badge>
 
               <Badge variant="outline">
@@ -57,19 +65,55 @@ export function LatestDetection({
               )}
             </div>
 
-            <Button
-              variant="outline"
-              disabled={isAcknowledging || acknowledged}
-              onClick={() => {
-                onAcknowledge(event.event_id)
-              }}
-            >
-              {isAcknowledging
-                ? "Acknowledging..."
-                : acknowledged
-                  ? "Acknowledged"
-                  : "Acknowledge"}
-            </Button>
+            {isPlayingSpeech && (
+              <p
+                className="text-sm font-medium"
+                role="status"
+              >
+                Speech playing; detection temporarily paused.
+              </p>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                disabled={
+                  isAcknowledging || acknowledged
+                }
+                onClick={() => {
+                  onAcknowledge(event.event_id)
+                }}
+              >
+                {isAcknowledging
+                  ? "Acknowledging..."
+                  : acknowledged
+                    ? "Acknowledged"
+                    : "Acknowledge"}
+              </Button>
+
+              <Button
+                disabled={
+                  !speechEnabled ||
+                  isGeneratingSpeech ||
+                  isPlayingSpeech
+                }
+                onClick={() => {
+                  onSpeak(event.event_id)
+                }}
+              >
+                {isGeneratingSpeech
+                  ? "Generating Speech..."
+                  : isPlayingSpeech
+                    ? "Playing..."
+                    : "Speak Alert"}
+              </Button>
+            </div>
+
+            {!speechEnabled && (
+              <p className="text-sm text-muted-foreground">
+                Enable Speech in Settings & Privacy to use spoken alerts.
+              </p>
+            )}
           </div>
         ) : (
           <p className="text-muted-foreground">

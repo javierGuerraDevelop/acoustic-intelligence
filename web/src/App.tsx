@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { useCaptureControl } from "@/hooks/useCaptureControl"
 import { useEventHistory } from "@/hooks/useEventHistory"
 import { useSettings } from "@/hooks/useSettings"
+import { useSpeechPlayback } from "@/hooks/useSpeechPlayback"
 import { useSystemState } from "@/hooks/useSystemState"
 
 function App() {
@@ -28,6 +29,13 @@ function App() {
     error: settingsError,
     changeSettings,
   } = useSettings()
+
+  const {
+    speak,
+    isGenerating: isGeneratingSpeech,
+    isPlaying: isPlayingSpeech,
+    error: speechError,
+  } = useSpeechPlayback()
 
   const events = historyItems.map((item) => item.event)
   const latestItem = historyItems[0]
@@ -99,10 +107,24 @@ function App() {
               isAcknowledging={
                 acknowledgingId === latestItem?.event.event_id
               }
+              speechEnabled={
+                settings?.speech_enabled ?? false
+              }
+              isGeneratingSpeech={isGeneratingSpeech}
+              isPlayingSpeech={isPlayingSpeech}
               onAcknowledge={(eventId) => {
                 void acknowledge(eventId)
               }}
+              onSpeak={(eventId) => {
+                void speak(eventId)
+              }}
             />
+
+            {speechError && (
+              <p className="text-sm text-destructive">
+                Unable to play spoken alert.
+              </p>
+            )}
 
             <RecentActivity events={events} />
           </>

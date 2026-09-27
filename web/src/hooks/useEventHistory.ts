@@ -82,11 +82,16 @@ export function useEventHistory() {
     }
   }
 
+  function clearHistory() {
+    setItems([])
+  }
+
   return {
     items,
     isLoading,
     error,
     acknowledgingId,
     acknowledge,
+    clearHistory,
   }
 }

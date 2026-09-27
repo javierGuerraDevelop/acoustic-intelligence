@@ -124,3 +124,27 @@ export interface DeleteHistoryRequest {
   request_id: string
   scope: "all_history"
 }
+
+export interface SpeechRequest {
+  schema_version: 1
+  request_id: string
+  event_id: string
+}
+
+export type PlaybackState =
+  | "started"
+  | "renewed"
+  | "ended"
+
+export interface PlaybackRequest {
+  schema_version: 1
+  request_id: string
+  state: PlaybackState
+  playback_id: string
+}
+
+export interface SummaryRequest {
+  schema_version: 1
+  request_id: string
+  lookback_minutes: number
+}
