@@ -48,38 +48,40 @@ bool StreamingResampler::process(const float* input, std::size_t input_frames,
     const float* in_ptr = input;
     while (remaining > 0) {
         ma_uint64 expected = 0;
-        if (ma_resampler_get_expected_output_frame_count(&resampler_, remaining, &expected) !=
-            MA_SUCCESS) {
+        if (ma_resampler_get_expected_output_frame_count(&resampler_, remaining, &expected) != MA_SUCCESS) {
             return false;
         }
-        if (expected + 64 > scratch_.size()) {
-            scratch_.resize(static_cast<std::size_t>(expected) + 64);
+        const std::size_t needed = (static_cast<std::size_t>(expected) + 64) * channels_;
+        if (needed > scratch_.size()) {
+            scratch_.resize(needed);
         }
 
-        ma_uint64 out_count = static_cast<ma_uint64>(scratch_.size());
-        ma_uint64 in_count = remaining;
+        ma_uint64 out_count = static_cast<ma_uint64>(scratch_.size() / channels_);
+        ma_uint64 in_count  = remaining;
         if (ma_resampler_process_pcm_frames(&resampler_, in_ptr, &in_count, scratch_.data(),
-                                            &out_count) != MA_SUCCESS) {
+                &out_count)
+            != MA_SUCCESS) {
             return false;
         }
         if (out_count > 0) {
             output.insert(output.end(), scratch_.begin(),
-                          scratch_.begin() + static_cast<std::ptrdiff_t>(out_count));
+                scratch_.begin() + static_cast<std::ptrdiff_t>(out_count * channels_));
         }
-        in_ptr += in_count;
+        in_ptr += in_count * channels_;
         remaining -= in_count;
         if (in_count == 0 && out_count == 0) {
-            return false;  // no forward progress; avoid an infinite loop
+            return false; // no forward progress; avoid an infinite loop
         }
     }
     return true;
 }
 
-std::uint64_t StreamingResampler::output_latency_frames() const {
+std::uint64_t StreamingResampler::output_latency_frames() const
+{
     if (!initialized_) {
         return 0;
     }
     return ma_resampler_get_output_latency(&resampler_);
 }
 
-}  // namespace radar
+} // namespace radar

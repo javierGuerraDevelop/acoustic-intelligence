@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <exception>
 #include <iterator>
 
 #include "radar/audio_format.hpp"
@@ -123,83 +124,92 @@ void CapturePipeline::rotate_stream(const char* /*reason*/)
     stream_rotations_.fetch_add(1, std::memory_order_relaxed);
 }
 
-void CapturePipeline::run() {
+void CapturePipeline::run()
+{
     std::uint32_t seen = ring_.signal_value();
     while (!stop_.load(std::memory_order_acquire)) {
-        // Control requests are handled before audio so a paused stream never
-        // processes frames from before the pause.
-        bool end_requested = false;
-        std::optional<PendingBegin> begin_requested;
-        {
-            std::lock_guard<std::mutex> lock(state_mutex_);
-            if (pending_end_) {
-                end_requested = true;
-                pending_end_ = false;
+        try {
+            // Control requests are handled before audio so a paused stream never
+            // processes frames from before the pause.
+            bool end_requested = false;
+            std::optional<PendingBegin> begin_requested;
+            {
+                std::lock_guard<std::mutex> lock(state_mutex_);
+                if (pending_end_) {
+                    end_requested = true;
+                    pending_end_  = false;
+                }
+                if (pending_begin_) {
+                    begin_requested = pending_begin_;
+                    pending_begin_.reset();
+                }
             }
-            if (pending_begin_) {
-                begin_requested = pending_begin_;
-                pending_begin_.reset();
-            }
-        }
 
-        if (end_requested) {
+            if (end_requested) {
+                drain_ring();
+                chunker_.clear();
+                if (resampler_) {
+                    resampler_->reset();
+                }
+                current_ = AudioChunk { };
+                stream_active_.store(false, std::memory_order_release);
+            }
+            if (begin_requested.has_value()) {
+                apply_begin(*begin_requested);
+            }
+            if (!stream_active_.load(std::memory_order_acquire)) {
+                ring_.wait_for_data(seen);
+                seen = ring_.signal_value();
+                continue;
+            }
+            if (consume_discontinuity_ && consume_discontinuity_()) {
+                rotate_stream("discontinuity");
+            }
+
+            const std::size_t readable = ring_.readable();
+            if (readable == 0) {
+                ring_.wait_for_data(seen);
+                seen = ring_.signal_value();
+                continue;
+            }
+
+            const std::size_t want = std::min({ readable, stage_.size(), chunker_.frames_until_boundary() });
+            const std::size_t got  = ring_.read(stage_.data(), want);
+            if (got == 0) {
+                continue;
+            }
+
+            converted_.clear();
+            if (!resampler_ || !resampler_->process(stage_.data(), got, converted_)) {
+                rotate_stream("resampler_failure");
+                continue;
+            }
+
+            const std::uint64_t dropped = dropped_frames_ ? dropped_frames_() : 0;
+            std::size_t offset          = 0;
+            while (offset < converted_.size()) {
+                const std::size_t count = std::min(converted_.size() - offset, chunker_.frames_until_boundary());
+                if (chunker_.push(converted_.data() + offset, count, dropped, current_)) {
+                    {
+                        std::lock_guard<std::mutex> lock(state_mutex_);
+                        std::snprintf(current_.stream_id.data(), current_.stream_id.size(), "%s",
+                            stream_id_.c_str());
+                    }
+                    queue_.push(std::make_shared<AudioChunk>(current_));
+                    chunks_emitted_.fetch_add(1, std::memory_order_relaxed);
+                    current_ = AudioChunk { };
+                }
+                offset += count;
+            }
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "pipeline: stream failed: %s\n", e.what());
+            resampler_.reset();
             drain_ring();
             chunker_.clear();
-            if (resampler_) {
-                resampler_->reset();
-            }
-            current_ = AudioChunk{};
+            current_ = AudioChunk { };
             stream_active_.store(false, std::memory_order_release);
-        }
-        if (begin_requested.has_value()) {
-            apply_begin(*begin_requested);
-        }
-        if (!stream_active_.load(std::memory_order_acquire)) {
-            ring_.wait_for_data(seen);
-            seen = ring_.signal_value();
-            continue;
-        }
-        if (consume_discontinuity_ && consume_discontinuity_()) {
-            rotate_stream("discontinuity");
-        }
-
-        const std::size_t readable = ring_.readable();
-        if (readable == 0) {
-            ring_.wait_for_data(seen);
-            seen = ring_.signal_value();
-            continue;
-        }
-
-        const std::size_t want = std::min({readable, stage_.size(), chunker_.frames_until_boundary()});
-        const std::size_t got = ring_.read(stage_.data(), want);
-        if (got == 0) {
-            continue;
-        }
-
-        converted_.clear();
-        if (!resampler_ || !resampler_->process(stage_.data(), got, converted_)) {
-            rotate_stream("resampler_failure");
-            continue;
-        }
-
-        const std::uint64_t dropped = dropped_frames_ ? dropped_frames_() : 0;
-        std::size_t offset = 0;
-        while (offset < converted_.size()) {
-            const std::size_t count =
-                std::min(converted_.size() - offset, chunker_.frames_until_boundary());
-            if (chunker_.push(converted_.data() + offset, count, dropped, current_)) {
-                {
-                    std::lock_guard<std::mutex> lock(state_mutex_);
-                    std::snprintf(current_.stream_id.data(), current_.stream_id.size(), "%s",
-                                  stream_id_.c_str());
-                }
-                queue_.push(std::make_shared<AudioChunk>(current_));
-                chunks_emitted_.fetch_add(1, std::memory_order_relaxed);
-                current_ = AudioChunk{};
-            }
-            offset += count;
         }
     }
 }
 
-}  // namespace radar
+} // namespace radar

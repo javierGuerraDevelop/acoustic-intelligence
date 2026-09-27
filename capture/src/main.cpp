@@ -103,44 +103,48 @@ int run_list()
 }
 
 struct SmokeContext {
-    std::atomic<std::uint64_t> frames{0};
-    std::atomic<std::uint64_t> dropped{0};
-    float peak = 0.0f;
+    std::atomic<std::uint64_t> frames { 0 };
+    std::atomic<std::uint64_t> dropped { 0 };
+    // callback writes, main thread reads; relaxed is sufficient
+    std::atomic<float> peak { 0.0f };
 };
 
 void smoke_callback(ma_device* device, void* /*output*/, const void* input,
-                    ma_uint32 frame_count) {
+    ma_uint32 frame_count)
+{
     auto* context = static_cast<SmokeContext*>(device->pUserData);
     if (input == nullptr) {
         context->dropped.fetch_add(frame_count, std::memory_order_relaxed);
         return;
     }
     const auto* samples = static_cast<const float*>(input);
-    float local_peak = context->peak;
+    float local_peak    = context->peak.load(std::memory_order_relaxed);
     for (ma_uint32 i = 0; i < frame_count; ++i) {
         local_peak = std::max(local_peak, std::fabs(samples[i]));
     }
-    context->peak = local_peak;
+    context->peak.store(local_peak, std::memory_order_relaxed);
     context->frames.fetch_add(frame_count, std::memory_order_relaxed);
 }
 
-int run_smoke(int seconds, bool null_backend) {
+int run_smoke(int seconds, bool null_backend)
+{
     ma_context context;
-    ma_backend backends[] = {ma_backend_null};
+    ma_backend backends[] = { ma_backend_null };
     if (ma_context_init(null_backend ? backends : nullptr, null_backend ? 1 : 0, nullptr,
-                        &context) != MA_SUCCESS) {
+            &context)
+        != MA_SUCCESS) {
         std::fprintf(stderr, "ma_context_init failed\n");
         return 1;
     }
 
-    ma_device_config config = ma_device_config_init(ma_device_type_capture);
-    config.capture.format = ma_format_f32;
-    config.capture.channels = 1;
-    config.sampleRate = 0;  // native rate
+    ma_device_config config         = ma_device_config_init(ma_device_type_capture);
+    config.capture.format           = ma_format_f32;
+    config.capture.channels         = 1;
+    config.sampleRate               = 0; // native rate
     config.periodSizeInMilliseconds = 10;
 
     SmokeContext smoke;
-    config.pUserData = &smoke;
+    config.pUserData    = &smoke;
     config.dataCallback = smoke_callback;
 
     ma_device device;
@@ -162,19 +166,20 @@ int run_smoke(int seconds, bool null_backend) {
     for (int elapsed = 1; elapsed <= seconds; ++elapsed) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         const std::uint64_t frames = smoke.frames.load(std::memory_order_relaxed);
-        const std::uint64_t delta = frames - previous_frames;
-        previous_frames = frames;
+        const std::uint64_t delta  = frames - previous_frames;
+        previous_frames            = frames;
         std::printf("t=%ds frames_delta=%llu peak=%.3f dropped=%llu\n", elapsed,
-                    static_cast<unsigned long long>(delta), static_cast<double>(smoke.peak),
-                    static_cast<unsigned long long>(smoke.dropped.load(std::memory_order_relaxed)));
+            static_cast<unsigned long long>(delta),
+            static_cast<double>(smoke.peak.load(std::memory_order_relaxed)),
+            static_cast<unsigned long long>(smoke.dropped.load(std::memory_order_relaxed)));
     }
 
     ma_device_stop(&device);
     ma_device_uninit(&device);
     ma_context_uninit(&context);
     std::printf("total_frames=%llu dropped=%llu\n",
-                static_cast<unsigned long long>(smoke.frames.load(std::memory_order_relaxed)),
-                static_cast<unsigned long long>(smoke.dropped.load(std::memory_order_relaxed)));
+        static_cast<unsigned long long>(smoke.frames.load(std::memory_order_relaxed)),
+        static_cast<unsigned long long>(smoke.dropped.load(std::memory_order_relaxed)));
     return 0;
 }
 
@@ -321,11 +326,15 @@ int main(int argc, char** argv)
     if (command == "fixture") {
         FixtureOptions options;
         options.backend_url = backend_url_from_env();
-        options.device_id = env_or("DEVICE_ID", kDefaultDeviceId);
-        options.token = env_or("CAPTURE_TOKEN", "");
+        options.device_id   = env_or("DEVICE_ID", kDefaultDeviceId);
+        options.token       = env_or("CAPTURE_TOKEN", "");
         for (int i = 2; i < argc; ++i) {
             if (std::strcmp(argv[i], "--seconds") == 0) {
                 options.seconds = std::atoi(option_value(argc, argv, i, "--seconds").c_str());
+                if (options.seconds <= 0 || options.seconds > 3600) {
+                    std::fprintf(stderr, "--seconds must be in 1..3600\n");
+                    return 2;
+                }
             } else if (std::strcmp(argv[i], "--tone-hz") == 0) {
                 options.tone_hz = std::atof(option_value(argc, argv, i, "--tone-hz").c_str());
             } else if (std::strcmp(argv[i], "--backend") == 0) {
