@@ -11,8 +11,8 @@
 #include <thread>
 #include <vector>
 
-#include "radar/chunker.hpp"
 #include "radar/chunk_queue.hpp"
+#include "radar/chunker.hpp"
 #include "radar/spsc_ring.hpp"
 
 namespace radar {
@@ -29,10 +29,10 @@ public:
     using DroppedFramesFn = std::function<std::uint64_t()>;
 
     CapturePipeline(SpscRing& ring, ChunkQueue& queue, DiscontinuityFn consume_discontinuity,
-                    DroppedFramesFn dropped_frames);
+        DroppedFramesFn dropped_frames);
     ~CapturePipeline();
 
-    CapturePipeline(const CapturePipeline&) = delete;
+    CapturePipeline(const CapturePipeline&)            = delete;
     CapturePipeline& operator=(const CapturePipeline&) = delete;
 
     void start();
@@ -43,7 +43,7 @@ public:
     // Returns the freshly generated stream UUID, which becomes visible to
     // heartbeats immediately.
     std::string begin_stream(std::uint32_t native_rate,
-                             std::chrono::system_clock::time_point start_utc);
+        std::chrono::system_clock::time_point start_utc);
 
     // Called by the supervisor after the device stops: the worker discards
     // queued frames, clears the partial chunk and marks the stream inactive.
@@ -51,17 +51,19 @@ public:
 
     bool stream_active() const noexcept { return stream_active_.load(std::memory_order_acquire); }
     std::string stream_id() const;
-    std::uint64_t chunks_emitted() const noexcept {
+    std::uint64_t chunks_emitted() const noexcept
+    {
         return chunks_emitted_.load(std::memory_order_relaxed);
     }
-    std::uint64_t stream_rotations() const noexcept {
+    std::uint64_t stream_rotations() const noexcept
+    {
         return stream_rotations_.load(std::memory_order_relaxed);
     }
 
 private:
     struct PendingBegin {
         std::uint32_t native_rate = 0;
-        std::chrono::system_clock::time_point start_utc{};
+        std::chrono::system_clock::time_point start_utc { };
         std::string stream_id;
     };
 
@@ -86,11 +88,11 @@ private:
     std::optional<PendingBegin> pending_begin_;
     bool pending_end_ = false;
 
-    std::atomic<bool> stop_{false};
-    std::atomic<bool> stream_active_{false};
-    std::atomic<std::uint64_t> chunks_emitted_{0};
-    std::atomic<std::uint64_t> stream_rotations_{0};
+    std::atomic<bool> stop_ { false };
+    std::atomic<bool> stream_active_ { false };
+    std::atomic<std::uint64_t> chunks_emitted_ { 0 };
+    std::atomic<std::uint64_t> stream_rotations_ { 0 };
     std::thread thread_;
 };
 
-}  // namespace radar
+} // namespace radar

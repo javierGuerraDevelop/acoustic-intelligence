@@ -11,26 +11,29 @@
 namespace radar {
 
 namespace {
-constexpr std::size_t kStageFrames = 4096;
-constexpr std::size_t kConvertedReserve = kStageFrames * 4 + 64;
-}  // namespace
+    constexpr std::size_t kStageFrames      = 4096;
+    constexpr std::size_t kConvertedReserve = kStageFrames * 4 + 64;
+} // namespace
 
 CapturePipeline::CapturePipeline(SpscRing& ring, ChunkQueue& queue,
-                                 DiscontinuityFn consume_discontinuity,
-                                 DroppedFramesFn dropped_frames)
-    : ring_(ring),
-      queue_(queue),
-      consume_discontinuity_(std::move(consume_discontinuity)),
-      dropped_frames_(std::move(dropped_frames)),
-      stage_(kStageFrames) {
+    DiscontinuityFn consume_discontinuity,
+    DroppedFramesFn dropped_frames)
+    : ring_(ring)
+    , queue_(queue)
+    , consume_discontinuity_(std::move(consume_discontinuity))
+    , dropped_frames_(std::move(dropped_frames))
+    , stage_(kStageFrames)
+{
     converted_.reserve(kConvertedReserve);
 }
 
-CapturePipeline::~CapturePipeline() {
+CapturePipeline::~CapturePipeline()
+{
     stop();
 }
 
-void CapturePipeline::start() {
+void CapturePipeline::start()
+{
     if (thread_.joinable()) {
         return;
     }
@@ -38,7 +41,8 @@ void CapturePipeline::start() {
     thread_ = std::thread([this] { run(); });
 }
 
-void CapturePipeline::stop() {
+void CapturePipeline::stop()
+{
     stop_.store(true, std::memory_order_release);
     ring_.notify();
     if (thread_.joinable()) {
@@ -47,22 +51,24 @@ void CapturePipeline::stop() {
 }
 
 std::string CapturePipeline::begin_stream(std::uint32_t native_rate,
-                                          std::chrono::system_clock::time_point start_utc) {
+    std::chrono::system_clock::time_point start_utc)
+{
     PendingBegin begin;
     begin.native_rate = native_rate;
-    begin.start_utc = start_utc;
-    begin.stream_id = make_uuid_v4();
+    begin.start_utc   = start_utc;
+    begin.stream_id   = make_uuid_v4();
     {
         std::lock_guard<std::mutex> lock(state_mutex_);
         pending_begin_ = begin;
-        pending_end_ = false;
-        stream_id_ = begin.stream_id;
+        pending_end_   = false;
+        stream_id_     = begin.stream_id;
     }
     ring_.notify();
     return begin.stream_id;
 }
 
-void CapturePipeline::end_stream() {
+void CapturePipeline::end_stream()
+{
     {
         std::lock_guard<std::mutex> lock(state_mutex_);
         pending_begin_.reset();
@@ -71,26 +77,29 @@ void CapturePipeline::end_stream() {
     ring_.notify();
 }
 
-std::string CapturePipeline::stream_id() const {
+std::string CapturePipeline::stream_id() const
+{
     std::lock_guard<std::mutex> lock(state_mutex_);
     return stream_id_;
 }
 
-void CapturePipeline::drain_ring() noexcept {
+void CapturePipeline::drain_ring() noexcept
+{
     float discard[512];
     while (ring_.read(discard, std::size(discard)) > 0) {
     }
 }
 
-void CapturePipeline::apply_begin(const PendingBegin& begin) {
+void CapturePipeline::apply_begin(const PendingBegin& begin)
+{
     if (!resampler_ || resampler_->input_rate() != begin.native_rate) {
         resampler_ = std::make_unique<StreamingResampler>(begin.native_rate, kWireSampleRateHz,
-                                                          static_cast<std::uint32_t>(kWireChannels));
+            static_cast<std::uint32_t>(kWireChannels));
     } else {
         resampler_->reset();
     }
     chunker_.begin_stream(begin.start_utc);
-    current_ = AudioChunk{};
+    current_ = AudioChunk { };
     {
         std::lock_guard<std::mutex> lock(state_mutex_);
         stream_id_ = begin.stream_id;
@@ -98,14 +107,15 @@ void CapturePipeline::apply_begin(const PendingBegin& begin) {
     stream_active_.store(true, std::memory_order_release);
 }
 
-void CapturePipeline::rotate_stream(const char* /*reason*/) {
+void CapturePipeline::rotate_stream(const char* /*reason*/)
+{
     drain_ring();
     if (resampler_) {
         resampler_->reset();
     }
     const auto now = std::chrono::system_clock::now();
     chunker_.begin_stream(now);
-    current_ = AudioChunk{};
+    current_ = AudioChunk { };
     {
         std::lock_guard<std::mutex> lock(state_mutex_);
         stream_id_ = make_uuid_v4();

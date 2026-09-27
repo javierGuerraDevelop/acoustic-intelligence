@@ -6,13 +6,16 @@
 namespace radar {
 
 StreamingResampler::StreamingResampler(std::uint32_t input_rate, std::uint32_t output_rate,
-                                       std::uint32_t channels)
-    : input_rate_(input_rate), output_rate_(output_rate), channels_(channels) {
+    std::uint32_t channels)
+    : input_rate_(input_rate)
+    , output_rate_(output_rate)
+    , channels_(channels)
+{
     if (input_rate_ == 0 || output_rate_ == 0 || channels_ == 0) {
         throw std::invalid_argument("resampler rates and channels must be positive");
     }
     ma_resampler_config config = ma_resampler_config_init(ma_format_f32, channels_, input_rate_,
-                                                          output_rate_, ma_resample_algorithm_linear);
+        output_rate_, ma_resample_algorithm_linear);
     if (ma_resampler_init(&config, nullptr, &resampler_) != MA_SUCCESS) {
         throw std::runtime_error("ma_resampler_init failed");
     }
@@ -20,20 +23,23 @@ StreamingResampler::StreamingResampler(std::uint32_t input_rate, std::uint32_t o
     scratch_.resize(4096);
 }
 
-StreamingResampler::~StreamingResampler() {
+StreamingResampler::~StreamingResampler()
+{
     if (initialized_) {
         ma_resampler_uninit(&resampler_, nullptr);
     }
 }
 
-void StreamingResampler::reset() {
+void StreamingResampler::reset()
+{
     if (initialized_) {
         ma_resampler_reset(&resampler_);
     }
 }
 
 bool StreamingResampler::process(const float* input, std::size_t input_frames,
-                                 std::vector<float>& output) {
+    std::vector<float>& output)
+{
     if (!initialized_ || input == nullptr || input_frames == 0) {
         return initialized_;
     }

@@ -32,20 +32,23 @@
 namespace {
 
 constexpr const char* kDefaultDeviceId = "70c4af1d-9b7c-4c28-a66c-a87489376e42";
-constexpr double kPi = 3.14159265358979323846;
+constexpr double kPi                   = 3.14159265358979323846;
 
-std::atomic<bool> g_stop{false};
+std::atomic<bool> g_stop { false };
 
-void handle_signal(int) {
+void handle_signal(int)
+{
     g_stop.store(true, std::memory_order_release);
 }
 
-std::string env_or(const char* name, const std::string& fallback) {
+std::string env_or(const char* name, const std::string& fallback)
+{
     const char* value = std::getenv(name);
     return (value != nullptr && *value != '\0') ? std::string(value) : fallback;
 }
 
-std::string backend_url_from_env() {
+std::string backend_url_from_env()
+{
     const std::string explicit_url = env_or("CAPTURE_BACKEND_URL", "");
     if (!explicit_url.empty()) {
         return explicit_url;
@@ -55,7 +58,8 @@ std::string backend_url_from_env() {
     return "http://" + host + ":" + port;
 }
 
-void print_usage() {
+void print_usage()
+{
     std::printf(
         "usage: radar_capture <command> [options]\n"
         "  list                         enumerate capture devices\n"
@@ -67,7 +71,8 @@ void print_usage() {
         "env: CAPTURE_BACKEND_URL, LOCAL_HOST, LOCAL_PORT, CAPTURE_TOKEN, DEVICE_ID\n");
 }
 
-std::string option_value(int argc, char** argv, int& index, const char* name) {
+std::string option_value(int argc, char** argv, int& index, const char* name)
+{
     if (index + 1 >= argc) {
         std::fprintf(stderr, "missing value for %s\n", name);
         std::exit(2);
@@ -75,7 +80,8 @@ std::string option_value(int argc, char** argv, int& index, const char* name) {
     return argv[++index];
 }
 
-int run_list() {
+int run_list()
+{
     ma_context context;
     if (ma_context_init(nullptr, 0, nullptr, &context) != MA_SUCCESS) {
         std::fprintf(stderr, "ma_context_init failed\n");
@@ -83,14 +89,13 @@ int run_list() {
     }
     ma_device_info* playback = nullptr;
     ma_uint32 playback_count = 0;
-    ma_device_info* capture = nullptr;
-    ma_uint32 capture_count = 0;
-    if (ma_context_get_devices(&context, &playback, &playback_count, &capture, &capture_count) ==
-        MA_SUCCESS) {
+    ma_device_info* capture  = nullptr;
+    ma_uint32 capture_count  = 0;
+    if (ma_context_get_devices(&context, &playback, &playback_count, &capture, &capture_count) == MA_SUCCESS) {
         std::printf("capture devices: %u\n", capture_count);
         for (ma_uint32 i = 0; i < capture_count; ++i) {
             std::printf("  [%u] %s%s\n", i, capture[i].name,
-                        capture[i].isDefault ? " (default)" : "");
+                capture[i].isDefault ? " (default)" : "");
         }
     }
     ma_context_uninit(&context);
@@ -178,31 +183,33 @@ struct RunOptions {
     std::string device_id;
     std::string token;
     bool null_backend = false;
-    int run_seconds = 0;
+    int run_seconds   = 0;
 };
 
-int run_supervisor(const RunOptions& options) {
+int run_supervisor(const RunOptions& options)
+{
     radar::Supervisor::Options supervisor_options;
-    supervisor_options.backend_url = options.backend_url;
-    supervisor_options.device_id = options.device_id;
-    supervisor_options.token = options.token;
-    supervisor_options.stop_flag = &g_stop;
+    supervisor_options.backend_url  = options.backend_url;
+    supervisor_options.device_id    = options.device_id;
+    supervisor_options.token        = options.token;
+    supervisor_options.stop_flag    = &g_stop;
     supervisor_options.null_backend = options.null_backend;
-    supervisor_options.run_seconds = options.run_seconds;
+    supervisor_options.run_seconds  = options.run_seconds;
 
     radar::Supervisor supervisor(std::move(supervisor_options));
     return supervisor.run();
 }
 
 struct FixtureOptions {
-    int seconds = 5;
+    int seconds    = 5;
     double tone_hz = 1000.0;
     std::string backend_url;
     std::string device_id;
     std::string token;
 };
 
-int run_fixture(const FixtureOptions& options) {
+int run_fixture(const FixtureOptions& options)
+{
     const radar::HttpUrl url = radar::parse_http_url(options.backend_url);
     if (!url.valid) {
         std::fprintf(stderr, "fixture: invalid backend url: %s\n", options.backend_url.c_str());
@@ -213,23 +220,23 @@ int run_fixture(const FixtureOptions& options) {
     radar::ChunkQueue queue(radar::kSenderQueueMaxChunks);
     radar::CapturePipeline pipeline(ring, queue, [] { return false; }, [] { return 0; });
     radar::HttpSender::Config sender_config;
-    sender_config.host = url.host;
-    sender_config.port = url.port;
-    sender_config.path = url.prefix + "/v1/audio/chunks";
+    sender_config.host      = url.host;
+    sender_config.port      = url.port;
+    sender_config.path      = url.prefix + "/v1/audio/chunks";
     sender_config.device_id = options.device_id;
-    sender_config.token = options.token;
+    sender_config.token     = options.token;
     radar::HttpSender sender(queue, sender_config);
 
     sender.start();
     pipeline.start();
     pipeline.begin_stream(48000, std::chrono::system_clock::now());
 
-    constexpr std::size_t kBlockFrames = 480;  // 10 ms at 48 kHz
+    constexpr std::size_t kBlockFrames = 480; // 10 ms at 48 kHz
     std::vector<float> block(kBlockFrames);
     const std::size_t total = static_cast<std::size_t>(options.seconds) * 48000;
 
     std::printf("fixture: sending %d s at 48000 Hz, tone %.1f Hz to %s\n", options.seconds,
-                options.tone_hz, options.backend_url.c_str());
+        options.tone_hz, options.backend_url.c_str());
     std::size_t position = 0;
     while (position < total && !g_stop.load(std::memory_order_acquire)) {
         if (ring.writable() < kBlockFrames) {
@@ -238,7 +245,7 @@ int run_fixture(const FixtureOptions& options) {
         }
         for (std::size_t i = 0; i < kBlockFrames; ++i) {
             const double t = static_cast<double>(position + i) / 48000.0;
-            block[i] = static_cast<float>(0.5 * std::sin(2.0 * kPi * options.tone_hz * t));
+            block[i]       = static_cast<float>(0.5 * std::sin(2.0 * kPi * options.tone_hz * t));
         }
         ring.write(block.data(), kBlockFrames);
         ring.notify();
@@ -254,16 +261,17 @@ int run_fixture(const FixtureOptions& options) {
     sender.stop();
 
     std::printf("fixture: chunks=%llu rotations=%llu sent=%llu failed=%llu\n",
-                static_cast<unsigned long long>(pipeline.chunks_emitted()),
-                static_cast<unsigned long long>(pipeline.stream_rotations()),
-                static_cast<unsigned long long>(sender.stats().sent.load()),
-                static_cast<unsigned long long>(sender.stats().failed.load()));
+        static_cast<unsigned long long>(pipeline.chunks_emitted()),
+        static_cast<unsigned long long>(pipeline.stream_rotations()),
+        static_cast<unsigned long long>(sender.stats().sent.load()),
+        static_cast<unsigned long long>(sender.stats().failed.load()));
     return 0;
 }
 
-}  // namespace
+} // namespace
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     std::signal(SIGINT, handle_signal);
 #ifdef SIGTERM
     std::signal(SIGTERM, handle_signal);
@@ -279,7 +287,7 @@ int main(int argc, char** argv) {
         return run_list();
     }
     if (command == "smoke") {
-        int seconds = 3;
+        int seconds       = 3;
         bool null_backend = false;
         for (int i = 2; i < argc; ++i) {
             if (std::strcmp(argv[i], "--null-backend") == 0) {
@@ -293,8 +301,8 @@ int main(int argc, char** argv) {
     if (command == "run") {
         RunOptions options;
         options.backend_url = backend_url_from_env();
-        options.device_id = env_or("DEVICE_ID", kDefaultDeviceId);
-        options.token = env_or("CAPTURE_TOKEN", "");
+        options.device_id   = env_or("DEVICE_ID", kDefaultDeviceId);
+        options.token       = env_or("CAPTURE_TOKEN", "");
         for (int i = 2; i < argc; ++i) {
             if (std::strcmp(argv[i], "--backend") == 0) {
                 options.backend_url = option_value(argc, argv, i, "--backend");
@@ -305,8 +313,7 @@ int main(int argc, char** argv) {
             } else if (std::strcmp(argv[i], "--null-backend") == 0) {
                 options.null_backend = true;
             } else if (std::strcmp(argv[i], "--run-seconds") == 0) {
-                options.run_seconds =
-                    std::atoi(option_value(argc, argv, i, "--run-seconds").c_str());
+                options.run_seconds = std::atoi(option_value(argc, argv, i, "--run-seconds").c_str());
             }
         }
         return run_supervisor(options);

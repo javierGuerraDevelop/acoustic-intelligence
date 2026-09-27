@@ -23,15 +23,15 @@ public:
         std::string backend_url = "http://127.0.0.1:8000";
         std::string token;
         std::string device_id;
-        std::atomic<bool>* stop_flag = nullptr;  // optional external stop signal
-        bool null_backend = false;               // headless lifecycle tests only
-        int run_seconds = 0;                     // 0 = run until stopped
+        std::atomic<bool>* stop_flag = nullptr; // optional external stop signal
+        bool null_backend            = false; // headless lifecycle tests only
+        int run_seconds              = 0; // 0 = run until stopped
     };
 
     explicit Supervisor(Options options);
     ~Supervisor();
 
-    Supervisor(const Supervisor&) = delete;
+    Supervisor(const Supervisor&)            = delete;
     Supervisor& operator=(const Supervisor&) = delete;
 
     // Blocking run loop; returns process exit code.
@@ -39,7 +39,10 @@ public:
     void request_stop() noexcept { stop_requested_.store(true, std::memory_order_release); }
 
 private:
-    enum class State { Stopped, Starting, Running, Error };
+    enum class State { Stopped,
+        Starting,
+        Running,
+        Error };
 
     static const char* state_name(State state);
     bool stop_pending() const noexcept;
@@ -57,15 +60,15 @@ private:
     HttpSender sender_;
     HeartbeatClient heartbeat_;
 
-    State state_ = State::Stopped;
-    bool desired_capture_ = false;
-    bool ever_authorized_ = false;
+    State state_           = State::Stopped;
+    bool desired_capture_  = false;
+    bool ever_authorized_  = false;
     int settings_revision_ = 0;
     std::string error_code_;
-    std::chrono::steady_clock::time_point lease_deadline_{};
-    std::chrono::steady_clock::time_point next_start_attempt_{};
+    std::chrono::steady_clock::time_point lease_deadline_ { };
+    std::chrono::steady_clock::time_point next_start_attempt_ { };
     std::uint64_t heartbeat_failures_ = 0;
-    std::atomic<bool> stop_requested_{false};
+    std::atomic<bool> stop_requested_ { false };
 };
 
-}  // namespace radar
+} // namespace radar

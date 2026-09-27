@@ -12,17 +12,17 @@ namespace radar {
 
 struct HeartbeatRequest {
     std::string device_id;
-    std::string stream_id;  // empty serializes as null
-    std::string state;      // stopped|starting|running|error
-    std::uint32_t native_rate_hz = 0;  // 0 serializes as null
+    std::string stream_id; // empty serializes as null
+    std::string state; // stopped|starting|running|error
+    std::uint32_t native_rate_hz       = 0; // 0 serializes as null
     std::uint64_t dropped_frames_total = 0;
-    std::string error_code;  // empty serializes as null
+    std::string error_code; // empty serializes as null
 };
 
 struct HeartbeatReply {
-    bool ok = false;
-    bool desired_capture = false;
-    int lease_ms = 0;
+    bool ok               = false;
+    bool desired_capture  = false;
+    int lease_ms          = 0;
     int settings_revision = 0;
     std::string error;
 };
@@ -34,7 +34,7 @@ public:
     HeartbeatClient(std::string base_url, std::string token);
     ~HeartbeatClient();
 
-    HeartbeatClient(const HeartbeatClient&) = delete;
+    HeartbeatClient(const HeartbeatClient&)            = delete;
     HeartbeatClient& operator=(const HeartbeatClient&) = delete;
 
     HeartbeatReply send(const HeartbeatRequest& request);
@@ -50,4 +50,4 @@ private:
     std::unique_ptr<httplib::Client> client_;
 };
 
-}  // namespace radar
+} // namespace radar

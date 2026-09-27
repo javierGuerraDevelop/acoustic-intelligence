@@ -2,13 +2,14 @@
 
 namespace radar {
 
-HttpUrl parse_http_url(const std::string& url) {
+HttpUrl parse_http_url(const std::string& url)
+{
     HttpUrl parsed;
     const std::string scheme = "http://";
     if (url.rfind(scheme, 0) != 0) {
         return parsed;
     }
-    std::string rest = url.substr(scheme.size());
+    std::string rest        = url.substr(scheme.size());
     const std::size_t slash = rest.find('/');
     if (slash == std::string::npos) {
         parsed.prefix.clear();
@@ -35,4 +36,4 @@ HttpUrl parse_http_url(const std::string& url) {
     return parsed;
 }
 
-}  // namespace radar
+} // namespace radar

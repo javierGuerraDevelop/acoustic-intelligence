@@ -13,10 +13,10 @@ namespace radar {
 class StreamingResampler {
 public:
     StreamingResampler(std::uint32_t input_rate, std::uint32_t output_rate,
-                       std::uint32_t channels = 1);
+        std::uint32_t channels = 1);
     ~StreamingResampler();
 
-    StreamingResampler(const StreamingResampler&) = delete;
+    StreamingResampler(const StreamingResampler&)            = delete;
     StreamingResampler& operator=(const StreamingResampler&) = delete;
 
     // Restarts the conversion state for a new contiguous stream. The plan
@@ -34,12 +34,12 @@ public:
     std::uint64_t output_latency_frames() const;
 
 private:
-    ma_resampler resampler_{};
-    bool initialized_ = false;
-    std::uint32_t input_rate_ = 0;
+    ma_resampler resampler_ { };
+    bool initialized_          = false;
+    std::uint32_t input_rate_  = 0;
     std::uint32_t output_rate_ = 0;
-    std::uint32_t channels_ = 0;
+    std::uint32_t channels_    = 0;
     std::vector<float> scratch_;
 };
 
-}  // namespace radar
+} // namespace radar

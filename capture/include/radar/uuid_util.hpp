@@ -8,4 +8,4 @@ namespace radar {
 // supervisor threads only; never called from the audio callback.
 std::string make_uuid_v4();
 
-}  // namespace radar
+} // namespace radar

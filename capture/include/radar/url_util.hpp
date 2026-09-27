@@ -11,9 +11,9 @@ struct HttpUrl {
     bool valid = false;
     std::string host;
     int port = 80;
-    std::string prefix;  // no trailing slash; may be empty
+    std::string prefix; // no trailing slash; may be empty
 };
 
 HttpUrl parse_http_url(const std::string& url);
 
-}  // namespace radar
+} // namespace radar

@@ -19,7 +19,7 @@ class ChunkQueue {
 public:
     explicit ChunkQueue(std::size_t max_chunks);
 
-    ChunkQueue(const ChunkQueue&) = delete;
+    ChunkQueue(const ChunkQueue&)            = delete;
     ChunkQueue& operator=(const ChunkQueue&) = delete;
 
     // Producer (processing worker). Drops and counts the oldest chunk when full.
@@ -41,8 +41,8 @@ private:
     std::condition_variable ready_;
     std::deque<std::shared_ptr<const AudioChunk>> queue_;
     std::size_t max_chunks_ = 1;
-    std::size_t dropped_ = 0;
-    bool closed_ = false;
+    std::size_t dropped_    = 0;
+    bool closed_            = false;
 };
 
-}  // namespace radar
+} // namespace radar

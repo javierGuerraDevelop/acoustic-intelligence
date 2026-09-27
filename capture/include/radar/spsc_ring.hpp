@@ -23,7 +23,7 @@ class SpscRing {
 public:
     explicit SpscRing(std::size_t capacity_frames);
 
-    SpscRing(const SpscRing&) = delete;
+    SpscRing(const SpscRing&)            = delete;
     SpscRing& operator=(const SpscRing&) = delete;
 
     std::size_t capacity() const noexcept { return capacity_; }
@@ -57,10 +57,10 @@ private:
 
     std::vector<float> buffer_;
     std::size_t capacity_ = 0;
-    std::size_t mask_ = 0;
-    alignas(64) std::atomic<std::uint64_t> write_index_{0};
-    alignas(64) std::atomic<std::uint64_t> read_index_{0};
-    alignas(64) mutable std::atomic<std::uint32_t> signal_{0};
+    std::size_t mask_     = 0;
+    alignas(64) std::atomic<std::uint64_t> write_index_ { 0 };
+    alignas(64) std::atomic<std::uint64_t> read_index_ { 0 };
+    alignas(64) mutable std::atomic<std::uint32_t> signal_ { 0 };
 };
 
-}  // namespace radar
+} // namespace radar

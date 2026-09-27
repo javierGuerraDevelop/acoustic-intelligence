@@ -5,9 +5,12 @@
 namespace radar {
 
 ChunkQueue::ChunkQueue(std::size_t max_chunks)
-    : max_chunks_(std::max<std::size_t>(max_chunks, 1)) {}
+    : max_chunks_(std::max<std::size_t>(max_chunks, 1))
+{
+}
 
-void ChunkQueue::push(std::shared_ptr<const AudioChunk> chunk) {
+void ChunkQueue::push(std::shared_ptr<const AudioChunk> chunk)
+{
     if (chunk == nullptr) {
         return;
     }
@@ -25,7 +28,8 @@ void ChunkQueue::push(std::shared_ptr<const AudioChunk> chunk) {
     ready_.notify_one();
 }
 
-std::shared_ptr<const AudioChunk> ChunkQueue::pop(std::chrono::milliseconds timeout) {
+std::shared_ptr<const AudioChunk> ChunkQueue::pop(std::chrono::milliseconds timeout)
+{
     std::unique_lock<std::mutex> lock(mutex_);
     if (!ready_.wait_for(lock, timeout, [this] { return closed_ || !queue_.empty(); })) {
         return nullptr;
@@ -38,7 +42,8 @@ std::shared_ptr<const AudioChunk> ChunkQueue::pop(std::chrono::milliseconds time
     return chunk;
 }
 
-void ChunkQueue::close() {
+void ChunkQueue::close()
+{
     {
         std::lock_guard<std::mutex> lock(mutex_);
         closed_ = true;
@@ -46,19 +51,22 @@ void ChunkQueue::close() {
     ready_.notify_all();
 }
 
-void ChunkQueue::clear() {
+void ChunkQueue::clear()
+{
     std::lock_guard<std::mutex> lock(mutex_);
     queue_.clear();
 }
 
-std::size_t ChunkQueue::size() const {
+std::size_t ChunkQueue::size() const
+{
     std::lock_guard<std::mutex> lock(mutex_);
     return queue_.size();
 }
 
-std::size_t ChunkQueue::dropped() const {
+std::size_t ChunkQueue::dropped() const
+{
     std::lock_guard<std::mutex> lock(mutex_);
     return dropped_;
 }
 
-}  // namespace radar
+} // namespace radar

@@ -2,7 +2,8 @@
 
 namespace radar {
 
-CaptureDevice::~CaptureDevice() {
+CaptureDevice::~CaptureDevice()
+{
     stop();
     if (context_ready_) {
         ma_context_uninit(&context_);
@@ -11,14 +12,16 @@ CaptureDevice::~CaptureDevice() {
 }
 
 void CaptureDevice::data_callback(ma_device* device, void* /*output*/, const void* input,
-                                  ma_uint32 frame_count) {
+    ma_uint32 frame_count)
+{
     auto* self = static_cast<CaptureDevice*>(device->pUserData);
     if (self != nullptr) {
         self->on_frames(static_cast<const float*>(input), frame_count);
     }
 }
 
-void CaptureDevice::on_frames(const float* input, std::uint32_t frame_count) noexcept {
+void CaptureDevice::on_frames(const float* input, std::uint32_t frame_count) noexcept
+{
     if (ring_ == nullptr || frame_count == 0) {
         return;
     }
@@ -32,22 +35,22 @@ void CaptureDevice::on_frames(const float* input, std::uint32_t frame_count) noe
     if (written < frame_count) {
         // Producer overflow: drop the unwritten frames, never the consumer's.
         dropped_frames_.fetch_add(static_cast<std::uint64_t>(frame_count - written),
-                                  std::memory_order_relaxed);
+            std::memory_order_relaxed);
         discontinuity_.store(true, std::memory_order_release);
     }
     frames_captured_.fetch_add(static_cast<std::uint64_t>(written), std::memory_order_relaxed);
     ring_->notify();
 }
 
-bool CaptureDevice::start(SpscRing& ring, std::string* error, bool null_backend) {
+bool CaptureDevice::start(SpscRing& ring, std::string* error, bool null_backend)
+{
     if (running_) {
         return true;
     }
     if (!context_ready_) {
-        ma_backend backends[] = {ma_backend_null};
-        const ma_result context_result =
-            null_backend ? ma_context_init(backends, 1, nullptr, &context_)
-                         : ma_context_init(nullptr, 0, nullptr, &context_);
+        ma_backend backends[]          = { ma_backend_null };
+        const ma_result context_result = null_backend ? ma_context_init(backends, 1, nullptr, &context_)
+                                                      : ma_context_init(nullptr, 0, nullptr, &context_);
         if (context_result != MA_SUCCESS) {
             if (error != nullptr) {
                 *error = "ma_context_init failed";
@@ -57,13 +60,13 @@ bool CaptureDevice::start(SpscRing& ring, std::string* error, bool null_backend)
         context_ready_ = true;
     }
 
-    ma_device_config config = ma_device_config_init(ma_device_type_capture);
-    config.capture.format = ma_format_f32;
-    config.capture.channels = 1;
-    config.sampleRate = 0;  // native device rate; worker resamples to 16 kHz
+    ma_device_config config         = ma_device_config_init(ma_device_type_capture);
+    config.capture.format           = ma_format_f32;
+    config.capture.channels         = 1;
+    config.sampleRate               = 0; // native device rate; worker resamples to 16 kHz
     config.periodSizeInMilliseconds = 10;
-    config.dataCallback = &CaptureDevice::data_callback;
-    config.pUserData = this;
+    config.dataCallback             = &CaptureDevice::data_callback;
+    config.pUserData                = this;
 
     const ma_result init_result = ma_device_init(&context_, &config, &device_);
     if (init_result != MA_SUCCESS) {
@@ -73,8 +76,8 @@ bool CaptureDevice::start(SpscRing& ring, std::string* error, bool null_backend)
         return false;
     }
     device_ready_ = true;
-    native_rate_ = device_.sampleRate;
-    ring_ = &ring;
+    native_rate_  = device_.sampleRate;
+    ring_         = &ring;
 
     const ma_result start_result = ma_device_start(&device_);
     if (start_result != MA_SUCCESS) {
@@ -83,7 +86,7 @@ bool CaptureDevice::start(SpscRing& ring, std::string* error, bool null_backend)
         }
         ma_device_uninit(&device_);
         device_ready_ = false;
-        ring_ = nullptr;
+        ring_         = nullptr;
         return false;
     }
     running_ = true;
@@ -92,25 +95,27 @@ bool CaptureDevice::start(SpscRing& ring, std::string* error, bool null_backend)
     return true;
 }
 
-void CaptureDevice::stop() {
+void CaptureDevice::stop()
+{
     if (!device_ready_) {
         running_ = false;
         return;
     }
     if (running_) {
-        ma_device_stop(&device_);  // blocks until the callback has returned
+        ma_device_stop(&device_); // blocks until the callback has returned
         running_ = false;
     }
     ma_device_uninit(&device_);
     device_ready_ = false;
-    ring_ = nullptr;
+    ring_         = nullptr;
 }
 
-std::string CaptureDevice::device_name() const {
+std::string CaptureDevice::device_name() const
+{
     if (!device_ready_) {
-        return {};
+        return { };
     }
     return device_.capture.name;
 }
 
-}  // namespace radar
+} // namespace radar
