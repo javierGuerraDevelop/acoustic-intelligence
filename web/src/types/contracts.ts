@@ -107,3 +107,20 @@ export interface EventHistoryResponse {
   items: EventHistoryItem[]
   next_cursor: string | null
 }
+
+export type JobStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+
+export interface Job {
+  job_id: string
+  status: JobStatus
+}
+
+export interface DeleteHistoryRequest {
+  schema_version: 1
+  request_id: string
+  scope: "all_history"
+}

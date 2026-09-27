@@ -1,7 +1,9 @@
 import { mockStateResponse } from "@/mocks/stateResponse"
 import type {
   AcknowledgeEventRequest,
+  DeleteHistoryRequest,
   EventHistoryResponse,
+  Job,
   Settings,
   StateResponse,
   UpdateSettingsRequest,
@@ -102,7 +104,6 @@ export async function updateSettings(
   request: UpdateSettingsRequest
 ): Promise<Settings> {
   if (USE_MOCK_API) {
-    // Simulate backend processing time.
     await new Promise((resolve) =>
       window.setTimeout(resolve, 750)
     )
@@ -148,7 +149,6 @@ export async function acknowledgeEvent(
   }
 
   if (USE_MOCK_API) {
-    // Simulate a short backend request.
     await new Promise((resolve) =>
       window.setTimeout(resolve, 300)
     )
@@ -211,6 +211,69 @@ export async function getEvents(
   if (!response.ok) {
     throw new Error(
       `Failed to fetch event history: ${response.status}`
+    )
+  }
+
+  return response.json()
+}
+
+export async function deleteHistory(): Promise<Job> {
+  const request: DeleteHistoryRequest = {
+    schema_version: 1,
+    request_id: crypto.randomUUID(),
+    scope: "all_history",
+  }
+
+  if (USE_MOCK_API) {
+    await new Promise((resolve) =>
+      window.setTimeout(resolve, 500)
+    )
+
+    return {
+      job_id: crypto.randomUUID(),
+      status: "completed",
+    }
+  }
+
+  const response = await fetch(
+    `${API_BASE}/privacy/delete`,
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json",
+      },
+
+      body: JSON.stringify(request),
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to delete history: ${response.status}`
+    )
+  }
+
+  return response.json()
+}
+
+export async function getJob(
+  jobId: string
+): Promise<Job> {
+  if (USE_MOCK_API) {
+    return {
+      job_id: jobId,
+      status: "completed",
+    }
+  }
+
+  const response = await fetch(
+    `${API_BASE}/jobs/${jobId}`
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch job: ${response.status}`
     )
   }
 
