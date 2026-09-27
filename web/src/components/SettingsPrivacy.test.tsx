@@ -6,13 +6,14 @@ import { SettingsPrivacy } from "@/components/SettingsPrivacy";
 import type { Settings } from "@/types/contracts";
 
 const mockSettings: Settings = {
+  schema_version: 1,
   revision: 1,
   capture_enabled: false,
   cloud_storage_enabled: false,
   analytics_enabled: false,
   speech_enabled: false,
-  retention_days: 30,
-  cooldown_seconds: 5,
+  retention_days: 1,
+  cooldown_seconds: 10,
   muted_until: null,
 };
 

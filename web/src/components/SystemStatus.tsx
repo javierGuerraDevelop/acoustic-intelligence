@@ -5,10 +5,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import type { SystemState } from "@/types/contracts"
+import type { RuntimeStatus } from "@/types/contracts"
 
 interface SystemStatusProps {
-  state: SystemState
+  state: RuntimeStatus
 }
 
 export function SystemStatus({ state }: SystemStatusProps) {
@@ -33,6 +33,39 @@ export function SystemStatus({ state }: SystemStatusProps) {
           <span className="text-sm font-medium">Cloud</span>
           <Badge variant="outline">{state.cloud}</Badge>
         </div>
+
+        {state.export_pending > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">
+              Export pending
+            </span>
+            <Badge variant="outline">
+              {state.export_pending}
+            </Badge>
+          </div>
+        )}
+
+        {state.export_dropped > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">
+              Export dropped
+            </span>
+            <Badge variant="outline">
+              {state.export_dropped}
+            </Badge>
+          </div>
+        )}
+
+        {state.audio_gaps > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">
+              Audio gaps
+            </span>
+            <Badge variant="outline">
+              {state.audio_gaps}
+            </Badge>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

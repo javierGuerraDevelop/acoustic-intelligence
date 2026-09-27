@@ -20,6 +20,7 @@ export function useSystemState() {
     useState(0)
 
   const lastSuccessRef = useRef<number | null>(null)
+  const pollingStartedRef = useRef<number | null>(null)
   const resetActiveRef = useRef(false)
 
   useEffect(() => {
@@ -29,6 +30,8 @@ export function useSystemState() {
       if (stopPolling) {
         return
       }
+
+      pollingStartedRef.current = Date.now()
 
       stopPolling = startStatePolling({
         onState: (newResponse) => {
@@ -97,15 +100,16 @@ export function useSystemState() {
         return
       }
 
-      const lastSuccess = lastSuccessRef.current
+      const since =
+        lastSuccessRef.current ??
+        pollingStartedRef.current
 
-      if (lastSuccess === null) {
+      if (since === null) {
         return
       }
 
       setIsDisconnected(
-        Date.now() - lastSuccess >
-          DISCONNECTED_AFTER_MS
+        Date.now() - since > DISCONNECTED_AFTER_MS
       )
     }, CONNECTION_CHECK_INTERVAL_MS)
 

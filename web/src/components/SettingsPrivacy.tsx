@@ -7,10 +7,11 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
-import type { Settings } from "@/types/contracts"
+import type { CloudSync, Settings } from "@/types/contracts"
 
 interface SettingsPrivacyProps {
   settings: Settings
+  cloudSync?: CloudSync | null
   isUpdating: boolean
   onChange: (
     changes: Partial<{
@@ -24,6 +25,7 @@ interface SettingsPrivacyProps {
 
 export function SettingsPrivacy({
   settings,
+  cloudSync,
   isUpdating,
   onChange,
   onHistoryDeleted,
@@ -101,6 +103,15 @@ export function SettingsPrivacy({
             aria-label="Enable speech"
           />
         </div>
+
+        {cloudSync === "pending" && (
+          <p
+            className="text-sm text-muted-foreground"
+            role="status"
+          >
+            Cloud synchronization pending.
+          </p>
+        )}
 
         <div className="border-t pt-6">
           <div className="space-y-3">

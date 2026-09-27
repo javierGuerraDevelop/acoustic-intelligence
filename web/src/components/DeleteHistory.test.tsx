@@ -67,8 +67,17 @@ describe("DeleteHistory", () => {
     const onDeleted = vi.fn();
 
     mockedDeleteHistory.mockResolvedValue({
+      schema_version: 1,
       job_id: "job-test-001",
-      status: "completed",
+      kind: "delete",
+      state: "complete",
+      updated_at: "2026-09-26T20:00:05.000Z",
+      result: {
+        local: "complete",
+        atlas: "complete",
+        snowflake: "complete",
+      },
+      error: null,
     });
 
     render(

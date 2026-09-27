@@ -93,7 +93,7 @@ export function useSpeechPlayback() {
       setIsPlaying(true)
 
       renewTimerRef.current = window.setInterval(() => {
-        void updatePlayback("renewed", playbackId).catch(
+        void updatePlayback("started", playbackId).catch(
           () => {
             setError(
               new Error(

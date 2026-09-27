@@ -39,8 +39,8 @@ export function DeleteHistory({
       let job = await deleteHistory()
 
       while (
-        job.status === "pending" ||
-        job.status === "running"
+        job.state === "pending" ||
+        job.state === "running"
       ) {
         await new Promise((resolve) =>
           window.setTimeout(resolve, 1000)
@@ -49,7 +49,7 @@ export function DeleteHistory({
         job = await getJob(job.job_id)
       }
 
-      if (job.status === "failed") {
+      if (job.state === "failed") {
         throw new Error("History deletion failed")
       }
 

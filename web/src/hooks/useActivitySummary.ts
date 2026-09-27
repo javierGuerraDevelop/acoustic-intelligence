@@ -25,8 +25,8 @@ export function useActivitySummary() {
       let job = await requestSummary()
 
       while (
-        job.status === "pending" ||
-        job.status === "running"
+        job.state === "pending" ||
+        job.state === "running"
       ) {
         await new Promise((resolve) =>
           window.setTimeout(
@@ -38,7 +38,7 @@ export function useActivitySummary() {
         job = await getJob(job.job_id)
       }
 
-      if (job.status !== "completed") {
+      if (job.state !== "complete") {
         throw new Error(
           "Activity summary generation failed"
         )

@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import {
+  afterEach,
   beforeEach,
   describe,
   expect,
@@ -9,7 +10,11 @@ import {
 
 import { useSystemState } from "@/hooks/useSystemState";
 import { startStatePolling } from "@/services/pollState";
-import type { StateResponse } from "@/types/contracts";
+import type {
+  DetectionEvent,
+  Settings,
+  StateResponse,
+} from "@/types/contracts";
 
 vi.mock("@/services/pollState", () => ({
   startStatePolling: vi.fn(),
@@ -24,17 +29,61 @@ type PollCallbacks = Parameters<
 
 let callbacks: PollCallbacks;
 
+const sampleEvent: DetectionEvent = {
+  schema_version: 1,
+  event_id: "event-test-001",
+  device_id: "laptop-test",
+  stream_id: "stream-test",
+  event_seq: 1,
+  window_start_at: "2026-09-26T20:00:00.000Z",
+  occurred_at: "2026-09-26T20:00:02.000Z",
+  detected_at: "2026-09-26T20:00:02.100Z",
+  label: "knock",
+  model_score: 0.8,
+  severity: "info",
+  action_id: "check_door",
+  source: "microphone",
+  processing: {
+    model_id: "yamnet/1",
+    rule_version: "demo-1",
+    sample_rate_hz: 16000,
+    window_ms: 2000,
+    hop_ms: 1000,
+    last_chunk_seq: 1,
+    inference_ms: 100,
+    capture_to_detection_ms: 100,
+    rms_dbfs: -20,
+    dropped_frames_total: 0,
+  },
+};
+
+const sampleSettings: Settings = {
+  schema_version: 1,
+  revision: 1,
+  capture_enabled: true,
+  cloud_storage_enabled: false,
+  analytics_enabled: false,
+  speech_enabled: false,
+  retention_days: 1,
+  cooldown_seconds: 10,
+  muted_until: null,
+};
+
 function createStateResponse(
   overrides: Partial<StateResponse> = {}
 ): StateResponse {
   return {
+    schema_version: 1,
     instance_id: "instance-test",
     cursor: 1,
     reset_required: false,
-    state: {
+    status: {
       capture: "running",
       model: "ready",
       cloud: "disabled",
+      export_pending: 0,
+      export_dropped: 0,
+      audio_gaps: 0,
     },
     changes: [],
     ...overrides,
@@ -54,6 +103,10 @@ describe("useSystemState", () => {
     );
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("increments eventVersion for event.created", () => {
     const { result } = renderHook(() =>
       useSystemState()
@@ -66,7 +119,10 @@ describe("useSystemState", () => {
         createStateResponse({
           changes: [
             {
+              cursor: 1,
               type: "event.created",
+              event_id: sampleEvent.event_id,
+              data: { event: sampleEvent },
             },
           ],
         })
@@ -86,7 +142,13 @@ describe("useSystemState", () => {
         createStateResponse({
           changes: [
             {
+              cursor: 2,
               type: "event.acknowledged",
+              event_id: sampleEvent.event_id,
+              data: {
+                event_id: sampleEvent.event_id,
+                acknowledged_at: "2026-09-26T20:00:05.000Z",
+              },
             },
           ],
         })
@@ -106,7 +168,9 @@ describe("useSystemState", () => {
         createStateResponse({
           changes: [
             {
+              cursor: 3,
               type: "history.cleared",
+              data: { deletion_id: "deletion-1" },
             },
           ],
         })
@@ -126,7 +190,9 @@ describe("useSystemState", () => {
         createStateResponse({
           changes: [
             {
+              cursor: 4,
               type: "settings.changed",
+              data: { settings: sampleSettings },
             },
           ],
         })
@@ -194,5 +260,47 @@ describe("useSystemState", () => {
     });
 
     expect(result.current.resetVersion).toBe(2);
+  });
+
+  it("reports disconnected after two seconds without any success", () => {
+    vi.useFakeTimers();
+
+    const { result } = renderHook(() =>
+      useSystemState()
+    );
+
+    expect(result.current.isDisconnected).toBe(false);
+
+    act(() => {
+      vi.advanceTimersByTime(2600);
+    });
+
+    expect(result.current.isDisconnected).toBe(true);
+  });
+
+  it("stays connected while responses keep arriving", () => {
+    vi.useFakeTimers();
+
+    const { result } = renderHook(() =>
+      useSystemState()
+    );
+
+    act(() => {
+      callbacks.onState(createStateResponse());
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    act(() => {
+      callbacks.onState(createStateResponse());
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(result.current.isDisconnected).toBe(false);
   });
 });

@@ -31,6 +31,7 @@ function App() {
 
   const {
     settings,
+    cloudSync,
     isLoading: settingsLoading,
     isUpdating: settingsUpdating,
     error: settingsError,
@@ -54,10 +55,13 @@ function App() {
   const events = historyItems.map((item) => item.event);
   const latestItem = historyItems[0];
 
-  const systemState = response?.state ?? {
+  const systemState = response?.status ?? {
     capture: "stopped" as const,
     model: "loading" as const,
     cloud: "disabled" as const,
+    export_pending: 0,
+    export_dropped: 0,
+    audio_gaps: 0,
   };
 
   const {
@@ -177,6 +181,7 @@ function App() {
         ) : settings ? (
           <SettingsPrivacy
             settings={settings}
+            cloudSync={cloudSync}
             isUpdating={settingsUpdating}
             onChange={(changes) => {
               void changeSettings(changes);

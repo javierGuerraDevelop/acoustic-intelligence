@@ -20,6 +20,18 @@ const mockItem: EventHistoryItem = {
     severity: "attention",
     action_id: "check_door",
     source: "fixture",
+    processing: {
+      model_id: "yamnet/1",
+      rule_version: "demo-1",
+      sample_rate_hz: 16000,
+      window_ms: 2000,
+      hop_ms: 1000,
+      last_chunk_seq: 1,
+      inference_ms: 110,
+      capture_to_detection_ms: 120,
+      rms_dbfs: -22.4,
+      dropped_frames_total: 0,
+    },
   },
   acknowledged_at: null,
 };

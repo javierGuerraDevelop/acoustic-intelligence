@@ -24,29 +24,26 @@ export type CloudStatus =
   | "degraded"
   | "offline"
 
-export interface SystemState {
+export interface RuntimeStatus {
   capture: CaptureStatus
   model: ModelStatus
   cloud: CloudStatus
+  export_pending: number
+  export_dropped: number
+  audio_gaps: number
 }
 
-export type ChangeType =
-  | "event.created"
-  | "event.acknowledged"
-  | "settings.changed"
-  | "job.changed"
-  | "history.cleared"
-
-export interface StateChange {
-  type: ChangeType
-}
-
-export interface StateResponse {
-  instance_id: string
-  cursor: number
-  reset_required: boolean
-  state: SystemState
-  changes: StateChange[]
+export interface EventProcessing {
+  model_id: string
+  rule_version: string
+  sample_rate_hz: number
+  window_ms: number
+  hop_ms: number
+  last_chunk_seq: number
+  inference_ms: number
+  capture_to_detection_ms: number
+  rms_dbfs: number
+  dropped_frames_total: number
 }
 
 export interface DetectionEvent {
@@ -65,9 +62,57 @@ export interface DetectionEvent {
   severity: EventSeverity
   action_id: EventAction
   source: EventSource
+
+  processing: EventProcessing
+}
+
+export type ChangeType =
+  | "event.created"
+  | "event.acknowledged"
+  | "settings.changed"
+  | "job.changed"
+  | "history.cleared"
+
+export type StateChange =
+  | {
+      cursor: number
+      type: "event.created"
+      event_id: string
+      data: { event: DetectionEvent }
+    }
+  | {
+      cursor: number
+      type: "event.acknowledged"
+      event_id: string
+      data: { event_id: string; acknowledged_at: string }
+    }
+  | {
+      cursor: number
+      type: "settings.changed"
+      data: { settings: Settings }
+    }
+  | {
+      cursor: number
+      type: "job.changed"
+      data: { job: Job }
+    }
+  | {
+      cursor: number
+      type: "history.cleared"
+      data: { deletion_id: string }
+    }
+
+export interface StateResponse {
+  schema_version: number
+  instance_id: string
+  cursor: number
+  reset_required: boolean
+  status: RuntimeStatus
+  changes: StateChange[]
 }
 
 export interface Settings {
+  schema_version: number
   revision: number
   capture_enabled: boolean
   cloud_storage_enabled: boolean
@@ -76,6 +121,12 @@ export interface Settings {
   retention_days: number
   cooldown_seconds: number
   muted_until: string | null
+}
+
+export type CloudSync = "not_needed" | "pending" | "complete"
+
+export interface UpdateSettingsResponse extends Settings {
+  cloud_sync: CloudSync
 }
 
 export interface UpdateSettingsRequest {
@@ -98,25 +149,35 @@ export interface AcknowledgeEventRequest {
   request_id: string
 }
 
+export interface AcknowledgeEventResponse {
+  schema_version: number
+  event_id: string
+  acknowledged_at: string
+}
+
 export interface EventHistoryItem {
   event: DetectionEvent
   acknowledged_at: string | null
 }
 
 export interface EventHistoryResponse {
+  schema_version: number
   items: EventHistoryItem[]
   next_cursor: string | null
 }
 
-export type JobStatus =
-  | "pending"
-  | "running"
-  | "completed"
-  | "failed"
+export type JobKind = "delete" | "summary"
+
+export type JobState = "pending" | "running" | "complete" | "failed"
 
 export interface Job {
+  schema_version: number
   job_id: string
-  status: JobStatus
+  kind: JobKind
+  state: JobState
+  updated_at: string
+  result: unknown
+  error: unknown
 }
 
 export interface DeleteHistoryRequest {
@@ -131,10 +192,7 @@ export interface SpeechRequest {
   event_id: string
 }
 
-export type PlaybackState =
-  | "started"
-  | "renewed"
-  | "ended"
+export type PlaybackState = "started" | "ended"
 
 export interface PlaybackRequest {
   schema_version: 1

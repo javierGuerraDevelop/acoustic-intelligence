@@ -5,12 +5,15 @@ import {
   updateSettings,
 } from "@/services/api"
 import type {
+  CloudSync,
   Settings,
   UpdateSettingsRequest,
 } from "@/types/contracts"
 
 export function useSettings(resetVersion = 0) {
   const [settings, setSettings] = useState<Settings | null>(null)
+  const [cloudSync, setCloudSync] =
+    useState<CloudSync | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   const [error, setError] = useState<Error | null>(null)
@@ -71,6 +74,7 @@ export function useSettings(resetVersion = 0) {
       })
 
       setSettings(updatedSettings)
+      setCloudSync(updatedSettings.cloud_sync)
     } catch (newError) {
       setError(
         newError instanceof Error
@@ -84,6 +88,7 @@ export function useSettings(resetVersion = 0) {
 
   return {
     settings,
+    cloudSync,
     isLoading,
     isUpdating,
     error,

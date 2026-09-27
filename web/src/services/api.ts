@@ -1,15 +1,19 @@
+import { mockEvents } from "@/mocks/events";
 import { mockStateResponse } from "@/mocks/stateResponse";
 import type {
   AcknowledgeEventRequest,
+  AcknowledgeEventResponse,
   DeleteHistoryRequest,
   EventHistoryResponse,
   Job,
   PlaybackRequest,
+  PlaybackState,
   Settings,
   SpeechRequest,
   StateResponse,
   SummaryRequest,
   UpdateSettingsRequest,
+  UpdateSettingsResponse,
 } from "@/types/contracts";
 
 const API_BASE = "/v1";
@@ -23,17 +27,34 @@ interface GetStateOptions {
 }
 
 let mockSettings: Settings = {
+  schema_version: 1,
   revision: 1,
   capture_enabled: false,
   cloud_storage_enabled: false,
   analytics_enabled: false,
   speech_enabled: false,
-  retention_days: 7,
-  cooldown_seconds: 5,
+  retention_days: 1,
+  cooldown_seconds: 10,
   muted_until: null,
 };
 
 let mockStateDeliveredInitialChanges = false;
+
+function mockJob(
+  kind: Job["kind"],
+  state: Job["state"] = "complete",
+  result: unknown = null
+): Job {
+  return {
+    schema_version: 1,
+    job_id: crypto.randomUUID(),
+    kind,
+    state,
+    updated_at: new Date().toISOString(),
+    result,
+    error: null,
+  };
+}
 
 export async function getSystemState({
   after,
@@ -53,8 +74,8 @@ export async function getSystemState({
     return {
       ...mockStateResponse,
 
-      state: {
-        ...mockStateResponse.state,
+      status: {
+        ...mockStateResponse.status,
         capture: mockSettings.capture_enabled
           ? "running"
           : "stopped",
@@ -115,7 +136,7 @@ export async function getSettings(): Promise<Settings> {
 
 export async function updateSettings(
   request: UpdateSettingsRequest
-): Promise<Settings> {
+): Promise<UpdateSettingsResponse> {
   if (USE_MOCK_API) {
     await new Promise((resolve) =>
       window.setTimeout(resolve, 750)
@@ -134,7 +155,7 @@ export async function updateSettings(
       revision: mockSettings.revision + 1,
     };
 
-    return { ...mockSettings };
+    return { ...mockSettings, cloud_sync: "not_needed" };
   }
 
   const response = await fetch(`${API_BASE}/settings`, {
@@ -156,7 +177,7 @@ export async function updateSettings(
 
 export async function acknowledgeEvent(
   eventId: string
-): Promise<void> {
+): Promise<AcknowledgeEventResponse> {
   const request: AcknowledgeEventRequest = {
     schema_version: 1,
     request_id: crypto.randomUUID(),
@@ -167,7 +188,11 @@ export async function acknowledgeEvent(
       window.setTimeout(resolve, 300)
     );
 
-    return;
+    return {
+      schema_version: 1,
+      event_id: eventId,
+      acknowledged_at: new Date().toISOString(),
+    };
   }
 
   const response = await fetch(
@@ -186,6 +211,8 @@ export async function acknowledgeEvent(
       `Failed to acknowledge event: ${response.status}`
     );
   }
+
+  return response.json();
 }
 
 export async function getEvents(
@@ -193,15 +220,12 @@ export async function getEvents(
   before?: string
 ): Promise<EventHistoryResponse> {
   if (USE_MOCK_API) {
-    const { mockEvents } = await import(
-      "@/mocks/events"
-    );
-
     await new Promise((resolve) =>
       window.setTimeout(resolve, 150)
     );
 
     return {
+      schema_version: 1,
       items: mockEvents.map((event) => ({
         event,
         acknowledged_at: null,
@@ -243,10 +267,11 @@ export async function deleteHistory(): Promise<Job> {
       window.setTimeout(resolve, 500)
     );
 
-    return {
-      job_id: crypto.randomUUID(),
-      status: "completed",
-    };
+    return mockJob("delete", "complete", {
+      local: "complete",
+      atlas: "complete",
+      snowflake: "complete",
+    });
   }
 
   const response = await fetch(
@@ -273,10 +298,7 @@ export async function getJob(
   jobId: string
 ): Promise<Job> {
   if (USE_MOCK_API) {
-    return {
-      job_id: jobId,
-      status: "completed",
-    };
+    return { ...mockJob("summary"), job_id: jobId };
   }
 
   const response = await fetch(
@@ -325,7 +347,7 @@ export async function requestSpeech(
 }
 
 export async function updatePlayback(
-  state: PlaybackRequest["state"],
+  state: PlaybackState,
   playbackId: string
 ): Promise<void> {
   const request: PlaybackRequest = {
@@ -369,10 +391,7 @@ export async function requestSummary(): Promise<Job> {
       window.setTimeout(resolve, 500)
     );
 
-    return {
-      job_id: crypto.randomUUID(),
-      status: "completed",
-    };
+    return mockJob("summary");
   }
 
   const response = await fetch(
