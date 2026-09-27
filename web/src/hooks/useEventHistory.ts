@@ -1,65 +1,61 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState } from "react";
 
-import {
-  acknowledgeEvent,
-  getEvents,
-} from "@/services/api"
-import type { EventHistoryItem } from "@/types/contracts"
+import { acknowledgeEvent, getEvents } from "@/services/api";
+import type { EventHistoryItem } from "@/types/contracts";
 
-export function useEventHistory() {
-  const [items, setItems] = useState<EventHistoryItem[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-  const [acknowledgingId, setAcknowledgingId] =
-    useState<string | null>(null)
+export function useEventHistory(resetVersion = 0, eventVersion = 0) {
+  const [items, setItems] = useState<EventHistoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
 
     async function loadEvents() {
       try {
-        const response = await getEvents()
+        const response = await getEvents();
 
         if (cancelled) {
-          return
+          return;
         }
 
-        setItems(response.items)
-        setError(null)
+        setItems(response.items);
+        setError(null);
       } catch (newError) {
         if (cancelled) {
-          return
+          return;
         }
 
         setError(
           newError instanceof Error
             ? newError
-            : new Error("Failed to load event history")
-        )
+            : new Error("Failed to load event history"),
+        );
       } finally {
         if (!cancelled) {
-          setIsLoading(false)
+          setIsLoading(false);
         }
       }
     }
 
-    void loadEvents()
+    void loadEvents();
 
     return () => {
-      cancelled = true
-    }
-  }, [])
+      cancelled = true;
+    };
+  }, [resetVersion, eventVersion])
 
   async function acknowledge(eventId: string) {
     if (acknowledgingId) {
-      return
+      return;
     }
 
-    setAcknowledgingId(eventId)
-    setError(null)
+    setAcknowledgingId(eventId);
+    setError(null);
 
     try {
-      await acknowledgeEvent(eventId)
+      await acknowledgeEvent(eventId);
 
       setItems((currentItems) =>
         currentItems.map((item) =>
@@ -68,22 +64,22 @@ export function useEventHistory() {
                 ...item,
                 acknowledged_at: new Date().toISOString(),
               }
-            : item
-        )
-      )
+            : item,
+        ),
+      );
     } catch (newError) {
       setError(
         newError instanceof Error
           ? newError
-          : new Error("Failed to acknowledge event")
-      )
+          : new Error("Failed to acknowledge event"),
+      );
     } finally {
-      setAcknowledgingId(null)
+      setAcknowledgingId(null);
     }
   }
 
   function clearHistory() {
-    setItems([])
+    setItems([]);
   }
 
   return {
@@ -93,5 +89,5 @@ export function useEventHistory() {
     acknowledgingId,
     acknowledge,
     clearHistory,
-  }
+  };
 }

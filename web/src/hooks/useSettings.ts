@@ -9,7 +9,7 @@ import type {
   UpdateSettingsRequest,
 } from "@/types/contracts"
 
-export function useSettings() {
+export function useSettings(resetVersion = 0) {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
@@ -50,7 +50,7 @@ export function useSettings() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [resetVersion])
 
   async function changeSettings(
     changes: UpdateSettingsRequest["changes"]
