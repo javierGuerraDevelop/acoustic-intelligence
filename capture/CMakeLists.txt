@@ -1,3 +1,9 @@
+cmake_minimum_required(VERSION 3.24)
+project(radar_capture LANGUAGES C CXX)
+
+include(FetchContent)
+find_package(Threads REQUIRED)
+
 # Build miniaudio's own implementation once; application code should just
 # include <miniaudio.h>, without defining MINIAUDIO_IMPLEMENTATION.
 set(MINIAUDIO_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -27,7 +33,62 @@ FetchContent_Declare(httplib
     URL_HASH SHA256=18064587e0cc6a0d5d56d619f4cbbcaba47aa5d84d86013abbd45d95c6653866
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
-FetchContent_MakeAvailable(miniaudio httplib)
+
+# Header-only JSON for heartbeat request/response only. HTTPS is still not
+# needed: cloud calls belong to Python.
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+set(JSON_Install OFF CACHE INTERNAL "")
+FetchContent_Declare(nlohmann_json
+    URL https://codeload.github.com/nlohmann/json/tar.gz/refs/tags/v3.11.3
+    URL_HASH SHA256=0d8ef5af7f9794e3263480193c491549b2ba6cc74bb018906202ada498a79406
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(miniaudio httplib nlohmann_json)
+
+# Warnings affect application code; no global -Werror or vendor flag changes.
+function(radar_apply_warnings target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /permissive- /Zc:__cplusplus)
+        target_compile_definitions(${target} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endfunction()
+
+# Core sources are listed explicitly here; add new .cpp files when they land
+# (see capture/AGENTS.md).
+set(RADAR_CAPTURE_CORE_SOURCES
+    src/spsc_ring.cpp
+    src/resampler.cpp
+    src/chunker.cpp
+    src/time_util.cpp
+    src/uuid_util.cpp
+    src/url_util.cpp
+    src/chunk_queue.cpp
+    src/capture_device.cpp
+    src/http_sender.cpp
+    src/heartbeat_client.cpp
+    src/capture_pipeline.cpp
+    src/supervisor.cpp
+)
+
+add_library(radar_capture_core STATIC ${RADAR_CAPTURE_CORE_SOURCES})
+target_compile_features(radar_capture_core PUBLIC cxx_std_20)
+set_target_properties(radar_capture_core PROPERTIES CXX_EXTENSIONS OFF)
+target_include_directories(radar_capture_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(radar_capture_core SYSTEM PRIVATE "${miniaudio_SOURCE_DIR}")
+# miniaudio_common_options supplies its upstream platform link dependencies.
+target_link_libraries(radar_capture_core
+    PUBLIC miniaudio miniaudio_common_options Threads::Threads httplib::httplib
+           nlohmann_json::nlohmann_json
+)
+radar_apply_warnings(radar_capture_core)
+
+# Application sources are listed explicitly here; add new .cpp files when they
+# land (see capture/AGENTS.md).
+set(RADAR_CAPTURE_SOURCES
+    src/main.cpp
+)
 
 add_executable(radar_capture ${RADAR_CAPTURE_SOURCES})
 target_compile_features(radar_capture PRIVATE cxx_std_20)
@@ -35,23 +96,8 @@ set_target_properties(radar_capture PROPERTIES
     CXX_EXTENSIONS OFF
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
-target_include_directories(radar_capture PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_include_directories(radar_capture SYSTEM PRIVATE "${miniaudio_SOURCE_DIR}")
-# miniaudio_common_options supplies its upstream platform link dependencies.
-target_link_libraries(radar_capture PRIVATE
-    miniaudio
-    miniaudio_common_options
-    httplib::httplib
-    Threads::Threads
-)
-
-# Warnings affect application code; no global -Werror or vendor flag changes.
-if(MSVC)
-    target_compile_options(radar_capture PRIVATE /W4 /permissive- /Zc:__cplusplus)
-    target_compile_definitions(radar_capture PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(radar_capture PRIVATE -Wall -Wextra -Wpedantic)
-endif()
+target_link_libraries(radar_capture PRIVATE radar_capture_core)
+radar_apply_warnings(radar_capture)
 
 # Add tests in capture/tests/CMakeLists.txt when actual tests exist.
 include(CTest)
