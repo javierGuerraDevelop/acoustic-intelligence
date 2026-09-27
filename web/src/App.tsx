@@ -1,17 +1,24 @@
-import { LatestDetection } from "@/components/LatestDetection"
-import { ListeningStatus } from "@/components/ListeningStatus"
-import { RecentActivity } from "@/components/RecentActivity"
-import { SettingsPrivacy } from "@/components/SettingsPrivacy"
-import { SystemStatus } from "@/components/SystemStatus"
-import { Badge } from "@/components/ui/badge"
-import { useCaptureControl } from "@/hooks/useCaptureControl"
-import { useEventHistory } from "@/hooks/useEventHistory"
-import { useSettings } from "@/hooks/useSettings"
-import { useSpeechPlayback } from "@/hooks/useSpeechPlayback"
-import { useSystemState } from "@/hooks/useSystemState"
+import { ActivitySummary } from "@/components/ActivitySummary";
+import { LatestDetection } from "@/components/LatestDetection";
+import { ListeningStatus } from "@/components/ListeningStatus";
+import { RecentActivity } from "@/components/RecentActivity";
+import { SettingsPrivacy } from "@/components/SettingsPrivacy";
+import { SystemStatus } from "@/components/SystemStatus";
+import { Badge } from "@/components/ui/badge";
+import { useActivitySummary } from "@/hooks/useActivitySummary";
+import { useCaptureControl } from "@/hooks/useCaptureControl";
+import { useEventHistory } from "@/hooks/useEventHistory";
+import { useSettings } from "@/hooks/useSettings";
+import { useSpeechPlayback } from "@/hooks/useSpeechPlayback";
+import { useSystemState } from "@/hooks/useSystemState";
 
 function App() {
-  const { response, error: pollingError } = useSystemState()
+  const {
+    response,
+    isDisconnected,
+    resetVersion,
+    eventVersion,
+  } = useSystemState();
 
   const {
     items: historyItems,
@@ -20,7 +27,7 @@ function App() {
     acknowledgingId,
     acknowledge,
     clearHistory,
-  } = useEventHistory()
+  } = useEventHistory(resetVersion, eventVersion);
 
   const {
     settings,
@@ -28,29 +35,36 @@ function App() {
     isUpdating: settingsUpdating,
     error: settingsError,
     changeSettings,
-  } = useSettings()
+  } = useSettings(resetVersion);
 
   const {
     speak,
     isGenerating: isGeneratingSpeech,
     isPlaying: isPlayingSpeech,
     error: speechError,
-  } = useSpeechPlayback()
+  } = useSpeechPlayback();
 
-  const events = historyItems.map((item) => item.event)
-  const latestItem = historyItems[0]
+  const {
+    generateSummary,
+    isGenerating: isGeneratingSummary,
+    error: summaryError,
+    lastGeneratedAt,
+  } = useActivitySummary();
+
+  const events = historyItems.map((item) => item.event);
+  const latestItem = historyItems[0];
 
   const systemState = response?.state ?? {
     capture: "stopped" as const,
     model: "loading" as const,
     cloud: "disabled" as const,
-  }
+  };
 
   const {
     toggleCapture,
     isUpdating: captureUpdating,
     error: captureError,
-  } = useCaptureControl(systemState.capture)
+  } = useCaptureControl(systemState.capture);
 
   return (
     <main className="min-h-screen bg-background p-6">
@@ -67,7 +81,7 @@ function App() {
           </div>
 
           <Badge variant="secondary">
-            {pollingError ? "Disconnected" : "Local"}
+            {isDisconnected ? "Disconnected" : "Local"}
           </Badge>
         </header>
 
@@ -82,12 +96,15 @@ function App() {
               : systemState.capture
           }
           onToggle={() => {
-            void toggleCapture()
+            void toggleCapture();
           }}
         />
 
         {captureError && (
-          <p className="text-sm text-destructive">
+          <p
+            className="text-sm text-destructive"
+            role="alert"
+          >
             Unable to change listening state.
           </p>
         )}
@@ -97,7 +114,10 @@ function App() {
             Loading detections...
           </p>
         ) : historyError ? (
-          <p className="text-sm text-destructive">
+          <p
+            className="text-sm text-destructive"
+            role="alert"
+          >
             Unable to load detection history.
           </p>
         ) : (
@@ -105,7 +125,8 @@ function App() {
             <LatestDetection
               item={latestItem}
               isAcknowledging={
-                acknowledgingId === latestItem?.event.event_id
+                acknowledgingId ===
+                latestItem?.event.event_id
               }
               speechEnabled={
                 settings?.speech_enabled ?? false
@@ -113,15 +134,18 @@ function App() {
               isGeneratingSpeech={isGeneratingSpeech}
               isPlayingSpeech={isPlayingSpeech}
               onAcknowledge={(eventId) => {
-                void acknowledge(eventId)
+                void acknowledge(eventId);
               }}
               onSpeak={(eventId) => {
-                void speak(eventId)
+                void speak(eventId);
               }}
             />
 
             {speechError && (
-              <p className="text-sm text-destructive">
+              <p
+                className="text-sm text-destructive"
+                role="alert"
+              >
                 Unable to play spoken alert.
               </p>
             )}
@@ -130,12 +154,24 @@ function App() {
           </>
         )}
 
+        <ActivitySummary
+          isGenerating={isGeneratingSummary}
+          lastGeneratedAt={lastGeneratedAt}
+          error={summaryError}
+          onGenerate={() => {
+            void generateSummary();
+          }}
+        />
+
         {settingsLoading ? (
           <p className="text-muted-foreground">
             Loading settings...
           </p>
         ) : settingsError ? (
-          <p className="text-sm text-destructive">
+          <p
+            className="text-sm text-destructive"
+            role="alert"
+          >
             Unable to load settings.
           </p>
         ) : settings ? (
@@ -143,14 +179,14 @@ function App() {
             settings={settings}
             isUpdating={settingsUpdating}
             onChange={(changes) => {
-              void changeSettings(changes)
+              void changeSettings(changes);
             }}
             onHistoryDeleted={clearHistory}
           />
         ) : null}
       </div>
     </main>
-  )
+  );
 }
 
-export default App
+export default App;
