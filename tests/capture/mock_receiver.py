@@ -368,6 +368,7 @@ def main() -> int:
 
     def request_stop(*_unused) -> None:
         stopping.set()
+        threading.Thread(target=server.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGINT, request_stop)
     signal.signal(signal.SIGTERM, request_stop)
