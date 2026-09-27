@@ -33,6 +33,8 @@ from ingest import (
     parse_chunk,
 )
 from pipeline import DetectionPipeline
+from playback import PlaybackConflict, PlaybackRegistry
+from speech import LABEL_TEMPLATES, SpeechError, SpeechService
 from storage import EventStore, SettingsStore
 from uploads import read_wav_upload
 
@@ -137,7 +139,8 @@ async def finish_in_thread(function, *args):
     return result
 
 
-def create_app(classifier_factory=SoundClassifier, db_path=None, capture_token=None):
+def create_app(classifier_factory=SoundClassifier, db_path=None, capture_token=None,
+               speech_service=None, playback_registry=None):
     @asynccontextmanager
     async def lifespan(app):
         app.state.classifier = None
@@ -150,11 +153,14 @@ def create_app(classifier_factory=SoundClassifier, db_path=None, capture_token=N
         app.state.settings_store = SettingsStore(path, retention_days=retention_days)
         app.state.changes = ChangeBuffer()
         app.state.registry = CaptureRegistry()
+        app.state.playback = playback_registry or PlaybackRegistry()
+        app.state.speech = speech_service or SpeechService.from_env()
         app.state.pipeline = DetectionPipeline(
             lambda: app.state.classifier,
             app.state.store,
             app.state.changes,
             app.state.registry,
+            app.state.playback,
         )
         app.state.audio_queue = ChunkQueue(sink=app.state.pipeline.handle_chunk)
         app.state.audio_queue.start()
@@ -233,6 +239,21 @@ def create_app(classifier_factory=SoundClassifier, db_path=None, capture_token=N
 
         schema_version: Literal[1]
         request_id: uuid.UUID
+
+    class SpeechRequest(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        schema_version: Literal[1]
+        request_id: uuid.UUID
+        event_id: uuid.UUID
+
+    class PlaybackRequest(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        schema_version: Literal[1]
+        request_id: uuid.UUID
+        state: Literal["started", "ended"]
+        playback_id: uuid.UUID
 
     def require_capture_token(request: Request):
         expected = getattr(request.app.state, "capture_token", "")
@@ -428,6 +449,47 @@ def create_app(classifier_factory=SoundClassifier, db_path=None, capture_token=N
                 event_id=validated,
             )
         return {"schema_version": 1, "event_id": validated, "acknowledged_at": acknowledged_at}
+
+    @app.post("/v1/speech")
+    def generate_speech(request: Request, body: SpeechRequest):
+        state = request.app.state
+        if not state.settings_store.get().speech_enabled:
+            raise ApiError(403, "FORBIDDEN", "Speech is disabled in settings.")
+        event = state.store.get_event(str(body.event_id))
+        if event is None:
+            raise ApiError(404, "NOT_FOUND", "Unknown event.")
+        occurred = event.get("occurred_at")
+        try:
+            occurred_at = datetime.fromisoformat(occurred.replace("Z", "+00:00"))
+        except (AttributeError, ValueError):
+            raise ApiError(409, "CONFLICT", "The event time is unavailable.") from None
+        if occurred_at.tzinfo is None:
+            occurred_at = occurred_at.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - occurred_at.astimezone(timezone.utc)).total_seconds()
+        if age > 60:
+            raise ApiError(409, "CONFLICT", "The event is too old for speech.")
+        template_id = LABEL_TEMPLATES.get(event.get("label"))
+        if template_id is None:
+            raise ApiError(422, "SCHEMA_INVALID", "Unsupported event label.")
+        try:
+            audio, cached = state.speech.synthesize(template_id)
+        except SpeechError as error:
+            raise ApiError(error.status_code, error.code, error.message, error.retryable) from error
+        headers = {"Cache-Control": "no-store"}
+        if cached:
+            headers["X-Speech-Cached"] = "true"
+        return Response(content=audio, media_type="audio/mpeg", headers=headers)
+
+    @app.post("/v1/playback")
+    def register_playback(request: Request, body: PlaybackRequest):
+        try:
+            if body.state == "started":
+                request.app.state.playback.start(str(body.playback_id))
+            else:
+                request.app.state.playback.end(str(body.playback_id))
+        except PlaybackConflict as error:
+            raise ApiError(409, "CONFLICT", "Another speech playback is active.") from error
+        return {"schema_version": 1, "playback_id": str(body.playback_id), "state": body.state}
 
     @app.get("/v1/settings")
     def get_settings():

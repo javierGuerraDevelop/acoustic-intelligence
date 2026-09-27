@@ -87,6 +87,15 @@ class EventStore:
                 ORDER BY occurred_at DESC, event_id DESC LIMIT ?""", (self.clock(), self.max_events)).fetchall()
         return [json.loads(row[0]) for row in rows]
 
+    def get_event(self, event_id):
+        with self.connection() as db:
+            self._prune(db)
+            row = db.execute(
+                "SELECT event_json FROM events WHERE event_id = ? AND event_kind = 'live'",
+                (event_id,),
+            ).fetchone()
+        return json.loads(row[0]) if row else None
+
     def get_live_events(self, limit=50, before=None):
         where = "event_kind = ? AND expires_at > ?"
         params = ["live", self.clock()]

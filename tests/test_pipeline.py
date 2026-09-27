@@ -5,6 +5,7 @@ import pytest
 from changes import ChangeBuffer
 from ingest import CaptureRegistry, Chunk
 from pipeline import DetectionPipeline
+from playback import PlaybackRegistry
 from storage import EventStore
 
 DEVICE_ID = "70c4af1d-9b7c-4c28-a66c-a87489376e42"
@@ -46,13 +47,13 @@ def make_chunk(seq, *, stream_id=STREAM_ID, device_id=DEVICE_ID):
     )
 
 
-def build(tmp_path, classifier):
+def build(tmp_path, classifier, playback=None):
     store = EventStore(tmp_path / "events.sqlite3")
     changes = ChangeBuffer()
     registry = CaptureRegistry()
     registry.record_heartbeat(device_id=DEVICE_ID, stream_id=STREAM_ID, state="running",
                               native_rate_hz=48000, dropped_frames_total=0, error_code=None)
-    pipeline = DetectionPipeline(lambda: classifier, store, changes, registry)
+    pipeline = DetectionPipeline(lambda: classifier, store, changes, registry, playback)
     return pipeline, store, changes, registry
 
 
@@ -164,6 +165,32 @@ def test_pipeline_new_stream_resets_event_sequence_and_smoothing(tmp_path):
     assert [event["event_seq"] for event in events] == [1, 1]
     assert [event["stream_id"] for event in events] == [STREAM_ID, NEW_STREAM_ID]
     assert classifier.resets >= 2
+
+
+def test_pipeline_suppresses_detection_during_playback(tmp_path):
+    clock = [100.0]
+    playback = PlaybackRegistry(monotonic=lambda: clock[0])
+    playback.start("playback-1")
+    classifier = ScriptedClassifier([
+        {"label": "knock", "score": 0.9},
+        {"label": "knock", "score": 0.9},
+    ])
+    pipeline, _, changes, _ = build(tmp_path, classifier, playback)
+
+    pipeline.handle_chunk(make_chunk(0))
+    pipeline.handle_chunk(make_chunk(1))
+    assert classifier.calls == []
+    assert changes_from(changes) == []
+
+    playback.end("playback-1")
+    pipeline.handle_chunk(make_chunk(2))  # still inside the two-second grace
+    assert classifier.calls == []
+    assert changes_from(changes) == []
+
+    clock[0] += 3.0
+    pipeline.handle_chunk(make_chunk(3))
+    pipeline.handle_chunk(make_chunk(4))
+    assert len(changes_from(changes)) == 1
 
 
 def test_pipeline_inference_errors_are_isolated(tmp_path):

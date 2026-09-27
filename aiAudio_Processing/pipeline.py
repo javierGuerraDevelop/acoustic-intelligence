@@ -28,16 +28,18 @@ RMS_FLOOR_DBFS = -120.0
 class DetectionPipeline:
     """Consume chunks, classify each completed window, persist canonical events."""
 
-    def __init__(self, classifier_provider, store, changes, registry, *, clock=None):
+    def __init__(self, classifier_provider, store, changes, registry, playback=None, *, clock=None):
         self._classifier_provider = classifier_provider
         self._store = store
         self._changes = changes
         self._registry = registry
+        self._playback = playback
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._window = deque(maxlen=WINDOW_CHUNKS)
         self._stream_id = None
         self._device_id = None
         self._event_seq = 0
+        self._suppressed = False
         self.audio_gaps = 0
         self.inference_failures = 0
 
@@ -45,6 +47,17 @@ class DetectionPipeline:
         classifier = self._classifier_provider()
         if classifier is None:
             return
+
+        if self._playback is not None and self._playback.suppressing():
+            if not self._suppressed:
+                self._suppressed = True
+                self._window.clear()
+                self._reset_smoothing(classifier)
+            return
+        if self._suppressed:
+            self._suppressed = False
+            self._window.clear()
+            self._reset_smoothing(classifier)
 
         reset_rules = False
         if self._registry.take_gap(chunk.device_id, chunk.stream_id):
@@ -57,13 +70,16 @@ class DetectionPipeline:
             reset_rules = True
         if reset_rules:
             self._window.clear()
-            reset = getattr(classifier, "reset_continuity", None)
-            if callable(reset):
-                reset()
+            self._reset_smoothing(classifier)
 
         self._window.append(chunk)
         if len(self._window) == WINDOW_CHUNKS:
             self._infer(classifier)
+
+    def _reset_smoothing(self, classifier):
+        reset = getattr(classifier, "reset_continuity", None)
+        if callable(reset):
+            reset()
 
     def _infer(self, classifier):
         first, last = self._window[0], self._window[-1]
