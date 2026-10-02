@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: aiAudio_Processing
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: aiAudio_Processing/requirements-local.lock
+      - name: Install dependencies
+        run: python -m pip install -r requirements-local.lock
+      # No YAMNet download: the suite uses fake classifiers and must pass with
+      # MODEL_DIR unset.
+      - name: Run tests
+        run: python -m pytest ../tests -q
+
+  web:
+    name: Web lint, build, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Test
+        run: npm test
+
+  capture:
+    name: Capture build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      # miniaudio runtime-links Linux audio backends, so no ALSA dev package
+      # is required to configure or compile.
+      - name: Configure
+        run: cmake -S capture -B build/capture -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build/capture --parallel
+      - name: Unit tests
+        run: ctest --test-dir build/capture --output-on-failure
+      - name: Integration scenarios
+        run: |
+          python3 tests/capture/integration_check.py --exe build/capture/bin/radar_capture --scenario lifecycle
+          python3 tests/capture/integration_check.py --exe build/capture/bin/radar_capture --scenario fixture
+          python3 tests/capture/integration_check.py --exe build/capture/bin/radar_capture --scenario stall
