@@ -148,4 +148,112 @@ describe("DeleteHistory", () => {
       )
     ).toBeInTheDocument();
   });
+
+  it("treats a failed remote deletion as pending when local history is gone", async () => {
+    const user = userEvent.setup();
+    const onDeleted = vi.fn();
+
+    mockedDeleteHistory.mockResolvedValue({
+      schema_version: 1,
+      job_id: "job-delete-002",
+      kind: "delete",
+      state: "failed",
+      updated_at: "2026-10-02T20:00:05.000Z",
+      result: {
+        local: "complete",
+        atlas: "complete",
+        snowflake: "pending",
+      },
+      error: {
+        code: "UNAVAILABLE",
+        retryable: true,
+        message:
+          "Snowflake analytics is unavailable.",
+      },
+    });
+
+    render(
+      <DeleteHistory onDeleted={onDeleted} />
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Delete History",
+      })
+    );
+
+    const dialog = screen.getByRole("alertdialog");
+
+    await user.click(
+      within(dialog).getByRole("button", {
+        name: "Delete History",
+      })
+    );
+
+    await waitFor(() => {
+      expect(onDeleted).toHaveBeenCalledOnce();
+    });
+
+    expect(
+      await screen.findByText(/Local history was deleted/)
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("alertdialog")
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.queryByText(
+        "Unable to delete detection history."
+      )
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the error state when the local deletion never completed", async () => {
+    const user = userEvent.setup();
+    const onDeleted = vi.fn();
+
+    mockedDeleteHistory.mockResolvedValue({
+      schema_version: 1,
+      job_id: "job-delete-003",
+      kind: "delete",
+      state: "failed",
+      updated_at: "2026-10-02T20:00:05.000Z",
+      result: null,
+      error: {
+        code: "INTERNAL",
+        retryable: true,
+        message: "The job failed unexpectedly.",
+      },
+    });
+
+    render(
+      <DeleteHistory onDeleted={onDeleted} />
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Delete History",
+      })
+    );
+
+    const dialog = screen.getByRole("alertdialog");
+
+    await user.click(
+      within(dialog).getByRole("button", {
+        name: "Delete History",
+      })
+    );
+
+    expect(
+      await screen.findByText(
+        "Unable to delete detection history."
+      )
+    ).toBeInTheDocument();
+
+    expect(onDeleted).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText(/Local history was deleted/)
+    ).not.toBeInTheDocument();
+  });
 });
