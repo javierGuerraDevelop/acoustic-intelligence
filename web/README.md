@@ -1,75 +1,94 @@
-# React + TypeScript + Vite
+# Live Sound Radar — React dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript dashboard for Live Sound Radar. It polls the local FastAPI
+service, presents live detections (**Possible knocking** / **Possible doorbell**)
+and event history, and exposes listening, acknowledgement, privacy, speech, and
+retention controls.
 
-Currently, two official plugins are available:
+The dashboard never calls ElevenLabs, Snowflake, or any cloud provider directly;
+it talks to the local backend through same-origin `/v1` paths only.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Stack
 
-## React Compiler
+- React 19 + TypeScript
+- Vite 8
+- Tailwind CSS 4 + shadcn/ui and Radix primitives
+- Vitest + Testing Library + jsdom
+- ESLint
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Requirements
 
-## Expanding the ESLint configuration
+- Node.js 24 LTS and npm
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Setup and run
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+From `web`:
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm ci
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Open <http://127.0.0.1:5173>.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Mock vs live API
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+`VITE_USE_MOCK_API` selects where the dashboard gets its data:
 
+```bash
+# Dashboard only: contract-valid mock data, no TensorFlow/YAMNet/microphone needed.
+VITE_USE_MOCK_API=true npm run dev
+
+# Real local backend on http://127.0.0.1:8000.
+VITE_USE_MOCK_API=false npm run dev
 ```
+
+```powershell
+$env:VITE_USE_MOCK_API = "true"   # or "false"
+npm run dev
+```
+
+When mock mode is off (the default), Vite proxies `/v1` requests to
+`http://127.0.0.1:8000` as configured in `vite.config.ts`. Start the local
+service first; see [`../aiAudio_Processing/README.md`](../aiAudio_Processing/README.md).
+
+Some dashboard flows target routes that the current backend does not implement
+yet (`POST /v1/summary`, `POST /v1/privacy/delete`, `GET /v1/jobs/{job_id}`).
+Those flows work in mock mode and are not functional against the live service.
+
+## Scripts
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Vite dev server with HMR on `127.0.0.1:5173`. |
+| `npm run build` | Type-check (`tsc -b`) and produce `dist/`. |
+| `npm run lint` | ESLint over the project. |
+| `npm test` | Vitest run (single pass). |
+| `npm run test:watch` | Vitest in watch mode. |
+| `npm run preview` | Serve the production build locally. |
+
+## Tests
+
+```bash
+npm run lint
+npm run build
+npm test
+```
+
+These are the same checks run by the `web` job in
+[`../.github/workflows/ci.yml`](../.github/workflows/ci.yml).
+
+## Project layout
+
+```text
+src/
+├── components/   # dashboard, settings, and ui components
+├── hooks/        # state polling and playback hooks
+├── services/     # API client and polling (mock vs live)
+├── mocks/        # contract-valid mock data
+├── types/        # shared API contracts
+└── test/         # test setup
+```
+
+See the [root README](../README.md) for the full system and
+[`AGENTS.md`](AGENTS.md) for frontend conventions.

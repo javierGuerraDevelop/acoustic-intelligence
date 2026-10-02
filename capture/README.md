@@ -22,7 +22,7 @@ logging, HTTP and device control stay on worker/supervisor threads.
 - C++20 compiler (verified GCC 15.2.0 MinGW-w64; MSVC is intended but was not
   available on this workstation)
 - A microphone for live capture; `--null-backend` and `fixture` run headless
-- Python 3.11+ only for the mock receiver and integration driver
+- Python 3.11–3.13 only for the mock receiver and integration driver
 
 CMake downloads these pinned dependencies on first configure:
 
@@ -34,27 +34,48 @@ CMake downloads these pinned dependencies on first configure:
 
 ## Build and test
 
+From the repository root. Linux/macOS (default generator):
+
 ```bash
+cmake -S capture -B build/capture -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/capture --parallel
+ctest --test-dir build/capture --output-on-failure
+```
+
+Windows (MinGW Makefiles, the originally verified toolchain):
+
+```powershell
 cmake -S capture -B build/capture -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Debug
 cmake --build build/capture --parallel
 ctest --test-dir build/capture -C Debug --output-on-failure
 ```
 
-Release build in a separate directory:
+Release build in a separate directory (add `-G "MinGW Makefiles"` on Windows):
 
 ```bash
-cmake -S capture -B build/capture-release -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake -S capture -B build/capture-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build/capture-release --parallel
 ```
 
 ## Run
 
+The binary is `build/capture/bin/radar_capture` on Linux/macOS and
+`build\capture\bin\radar_capture.exe` on Windows.
+
 ```bash
-build/capture/bin/radar_capture.exe list
-build/capture/bin/radar_capture.exe smoke --seconds 3          # live mic RMS diagnostics
-build/capture/bin/radar_capture.exe smoke --null-backend       # headless callback timing
-build/capture/bin/radar_capture.exe run                        # supervised capture + sender
-build/capture/bin/radar_capture.exe fixture --seconds 6        # synthetic tone through the pipeline
+build/capture/bin/radar_capture list
+build/capture/bin/radar_capture smoke --seconds 3          # live mic RMS diagnostics
+build/capture/bin/radar_capture smoke --null-backend       # headless callback timing
+build/capture/bin/radar_capture run                        # supervised capture + sender
+build/capture/bin/radar_capture fixture --seconds 6        # synthetic tone through the pipeline
+```
+
+```powershell
+.\build\capture\bin\radar_capture.exe list
+.\build\capture\bin\radar_capture.exe smoke --seconds 3
+.\build\capture\bin\radar_capture.exe smoke --null-backend
+.\build\capture\bin\radar_capture.exe run
+.\build\capture\bin\radar_capture.exe fixture --seconds 6
 ```
 
 `run` reads `CAPTURE_BACKEND_URL` (or `LOCAL_HOST`/`LOCAL_PORT`),
@@ -65,16 +86,22 @@ lease is not renewed.
 
 ## Mock receiver and integration checks
 
-`tests/capture/mock_receiver.py` implements the section 5.2 endpoints with
-auth, framing validation, sequence-gap detection, tone/RMS analysis and
-simulated slow/error/authorization behaviour. `tests/capture/integration_check.py`
-drives the three acceptance scenarios:
+`tests/capture/integration_check.py` starts the receiver itself and drives the
+three acceptance scenarios (the standalone receiver command below is only for
+manual debugging):
 
 ```bash
-python tests/capture/mock_receiver.py --port 8010 --token testtoken --verbose
-python tests/capture/integration_check.py --exe build/capture/bin/radar_capture.exe --scenario lifecycle
-python tests/capture/integration_check.py --exe build/capture/bin/radar_capture.exe --scenario fixture
-python tests/capture/integration_check.py --exe build/capture/bin/radar_capture.exe --scenario stall
+python3 tests/capture/mock_receiver.py --port 8010 --token testtoken --verbose
+python3 tests/capture/integration_check.py --exe build/capture/bin/radar_capture --scenario lifecycle
+python3 tests/capture/integration_check.py --exe build/capture/bin/radar_capture --scenario fixture
+python3 tests/capture/integration_check.py --exe build/capture/bin/radar_capture --scenario stall
+```
+
+```powershell
+python tests\capture\mock_receiver.py --port 8010 --token testtoken --verbose
+python tests\capture\integration_check.py --exe build\capture\bin\radar_capture.exe --scenario lifecycle
+python tests\capture\integration_check.py --exe build\capture\bin\radar_capture.exe --scenario fixture
+python tests\capture\integration_check.py --exe build\capture\bin\radar_capture.exe --scenario stall
 ```
 
 ## Troubleshooting

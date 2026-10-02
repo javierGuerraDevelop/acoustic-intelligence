@@ -43,6 +43,5 @@ Resolve routine implementation choices without repeatedly requesting confirmatio
   language-specific style; see that component's own AGENTS.md for those.
 
 ## More
-- Consult the relevant sections of Live-Sound-Radar-Architecture-and-Execution-Plan.md
-  for component boundaries, exact interfaces, and acceptance criteria.
+- For user-facing setup and commands, see README.md and each component's README.
 - For capture/C++ specifics, see capture/AGENTS.md and docs/audio-contract.md.
