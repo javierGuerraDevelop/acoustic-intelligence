@@ -428,7 +428,7 @@ Run the account self-test after configuring credentials:
 build/venv-analytics/bin/python -m cloud.analytics.selftest
 ```
 
-See [`sql/README.md`](sql/README.md) for table setup, key-pair authentication, and Snowflake privileges. The Snowflake adapter is not required for the local detection pipeline.
+See [`sql/README.md`](sql/README.md) for table setup, key-pair authentication, and Snowflake privileges. The Snowflake adapter is not required for the local detection pipeline; when `SNOWFLAKE_*` is configured, the local service wires it into `POST /v1/summary` and `POST /v1/privacy/delete`.
 
 ## Testing
 
@@ -530,6 +530,7 @@ The current FastAPI service implements:
 - Settings read/update (`GET`/`PATCH /v1/settings`)
 - ElevenLabs speech generation (`POST /v1/speech`)
 - Playback coordination (`POST /v1/playback`)
+- Background jobs for AI summaries, history deletion, and polling (`POST /v1/summary`, `POST /v1/privacy/delete`, `GET /v1/jobs/{job_id}`)
 - Health endpoints (`GET /health/live`, `GET /health/ready`)
 - The legacy `GET /events` list
 
@@ -545,19 +546,15 @@ The frontend implements:
 - UI flows for history deletion and Snowflake activity summaries
 - automated component and state tests
 
-### Still being integrated
+### Snowflake summaries and remote deletion
 
-The current FastAPI service does **not** yet expose these frontend-requested routes:
+`POST /v1/summary` and `POST /v1/privacy/delete` return a background `Job` that the dashboard polls through `GET /v1/jobs/{job_id}`; both publish `job.changed` on the `/v1/state` change feed.
 
-```text
-POST /v1/summary
-POST /v1/privacy/delete
-GET  /v1/jobs/{job_id}
-```
+- History deletion always clears local SQLite history, disables cloud-storage, analytics, and speech permissions, and advances the local policy epoch. When the Snowflake adapter is configured, the device's cloud events are deleted too.
+- AI summaries require `analytics_enabled` plus Snowflake credentials (`SNOWFLAKE_*`). Without them the summary job fails with a visible, retryable `DEPENDENCY_UNAVAILABLE` error instead of fabricating a summary.
+- This repository has no MongoDB Atlas integration, so no event metadata is ever uploaded there; the Atlas leg of deletion is complete by construction.
 
-The dashboard's history-deletion and summary flows therefore work with contract-valid mock behavior (`VITE_USE_MOCK_API=true`) but are not functional against the live service until those routes land, plus a background job lookup for async work. The Snowflake analytics adapter exists and is tested separately, but still needs to be connected to the local/cloud API flow for end-to-end summaries.
-
-Cloud persistence is not required for the local sound-detection pipeline to function.
+The Snowflake analytics adapter still needs the cloud host (Atlas + export scheduler) for end-to-end cloud sync. Cloud persistence is not required for the local sound-detection pipeline to function.
 
 ## Project structure
 
@@ -574,8 +571,10 @@ acoustic-intelligence/
 │
 ├── aiAudio_Processing/     # FastAPI + YAMNet local service
 │   ├── api.py
+│   ├── analytics.py        # optional Snowflake adapter wiring
 │   ├── classifier.py
 │   ├── detector.py
+│   ├── jobs.py             # /v1/summary and /v1/privacy/delete jobs
 │   ├── pipeline.py
 │   ├── speech.py
 │   ├── storage.py

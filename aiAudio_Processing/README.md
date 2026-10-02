@@ -111,22 +111,46 @@ Vite build in `../web/dist` is served at `/` when it exists.
 | `PATCH` | `/v1/settings` | Update settings with optimistic revision checks. |
 | `POST` | `/v1/speech` | Generate MP3 speech for an eligible recent event. |
 | `POST` | `/v1/playback` | Register speech playback start/end for detection suppression. |
+| `POST` | `/v1/summary` | Start an AI activity summary job (`202`); requires analytics consent. |
+| `POST` | `/v1/privacy/delete` | Start a history-deletion job (`202`); always clears local history. |
+| `GET` | `/v1/jobs/{job_id}` | Poll a background job (`pending`/`running`/`complete`/`failed`). |
 | `GET` | `/events` | Legacy event list retained for compatibility. |
 
-### Not implemented yet
+### Snowflake summaries and remote deletion
 
-These routes are requested by the dashboard but are **not** part of the current
-FastAPI service; the dashboard uses mock behavior for them in
-`VITE_USE_MOCK_API=true` mode:
+`POST /v1/summary` and `POST /v1/privacy/delete` return a background `Job`:
+`{schema_version, job_id, kind, state, updated_at, result, error}`. Jobs are
+process-local (a restart clears them, matching the `/v1/state` reset behavior)
+and publish `job.changed` on the change feed.
 
-```text
-POST /v1/summary
-POST /v1/privacy/delete
-GET  /v1/jobs/{job_id}
-```
+Summary generation:
 
-Connecting Snowflake analytics and background jobs to these routes is future
-work; the local detection pipeline does not depend on them.
+- Requires `analytics_enabled` in settings; otherwise the route returns `403`.
+- Valid `lookback_minutes` are 5–60. Only one summary runs at a time and at most
+  one starts per minute; duplicates by `request_id` return the same job.
+- Uses the Snowflake adapter in [`../cloud/analytics`](../cloud/analytics/README.md)
+  when `SNOWFLAKE_*` variables are configured. Install its optional dependencies
+  into the service environment first:
+
+  ```bash
+  .venv/bin/python -m pip install -r ../cloud/analytics/requirements-analytics.lock
+  ```
+
+  Without credentials the job fails with a retryable `DEPENDENCY_UNAVAILABLE`
+  error rather than fabricating a summary.
+
+History deletion:
+
+- Clears local SQLite history, disables cloud-storage/analytics/speech
+  permissions, advances the local policy epoch, and clears pending change-feed
+  entries before publishing `history.cleared`.
+- Calls the Snowflake adapter's device deletion when it is configured; a remote
+  failure marks the job failed with a `snowflake: "pending"` partial result
+  while the local deletion stays complete.
+- This build has no MongoDB Atlas integration, so no metadata was ever uploaded
+  there; the Atlas leg reports `complete` by construction.
+
+The local detection pipeline does not depend on either integration.
 
 ## Tests
 
@@ -148,8 +172,10 @@ The suite uses fake classifiers and does not need YAMNet or `MODEL_DIR`:
 - `classifier.py` — YAMNet loading and scoring.
 - `detector.py` — thresholds, smoothing, cooldown rules.
 - `events.py` — canonical event construction/formatting.
-- `storage.py` — SQLite event and settings stores.
+- `storage.py` — SQLite event and settings stores, device identity/policy epoch.
 - `changes.py` — cursor-based change buffer for `/v1/state`.
+- `jobs.py` — in-process job registry for summaries and history deletion.
+- `analytics.py` — optional Snowflake adapter wiring and sanitized errors.
 - `speech.py` — ElevenLabs speech service.
 - `playback.py` — playback lease/detection suppression.
 - `scripts/download_model.py` — explicit one-time YAMNet download.
