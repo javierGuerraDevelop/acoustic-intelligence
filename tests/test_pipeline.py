@@ -48,7 +48,9 @@ def make_chunk(seq, *, stream_id=STREAM_ID, device_id=DEVICE_ID):
 
 
 def build(tmp_path, classifier, playback=None):
-    store = EventStore(tmp_path / "events.sqlite3")
+    # Freeze the store clock at START so retention pruning never depends on the
+    # wall clock of the machine running the tests.
+    store = EventStore(tmp_path / "events.sqlite3", clock=lambda: START.timestamp())
     changes = ChangeBuffer()
     registry = CaptureRegistry()
     registry.record_heartbeat(device_id=DEVICE_ID, stream_id=STREAM_ID, state="running",
