@@ -52,10 +52,12 @@ When mock mode is off (the default), Vite proxies `/v1` requests to
 `http://127.0.0.1:8000` as configured in `vite.config.ts`. Start the local
 service first; see [`../aiAudio_Processing/README.md`](../aiAudio_Processing/README.md).
 
-The history-deletion flow works against the live service. The AI summary flow
-needs `analytics_enabled` plus Snowflake credentials on the backend; without
-them the job fails visibly with a retryable dependency error. Both flows use
-contract-valid mock data in `VITE_USE_MOCK_API=true` mode.
+The history-deletion flow works against the live service. The AI summary panel
+renders the generated text, exact counts, window, and model provenance, and the
+Generate button is disabled until analytics consent is enabled. Generating
+needs Snowflake credentials on the backend; without them the job fails visibly
+with a retryable dependency error. Both flows use contract-valid mock data in
+`VITE_USE_MOCK_API=true` mode.
 
 ## Scripts
 
