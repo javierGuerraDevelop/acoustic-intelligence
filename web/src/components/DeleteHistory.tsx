@@ -16,9 +16,26 @@ import {
   deleteHistory,
   getJob,
 } from "@/services/api"
+import type { DeleteHistoryResult } from "@/types/contracts"
 
 interface DeleteHistoryProps {
   onDeleted: () => void
+}
+
+function isDeleteHistoryResult(
+  value: unknown
+): value is DeleteHistoryResult {
+  if (typeof value !== "object" || value === null) {
+    return false
+  }
+
+  const candidate = value as Record<string, unknown>
+
+  return (
+    candidate.local === "complete" &&
+    typeof candidate.atlas === "string" &&
+    typeof candidate.snowflake === "string"
+  )
 }
 
 export function DeleteHistory({
@@ -26,6 +43,8 @@ export function DeleteHistory({
 }: DeleteHistoryProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<Error | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   async function handleDelete() {
     if (isDeleting) {
@@ -34,6 +53,7 @@ export function DeleteHistory({
 
     setIsDeleting(true)
     setError(null)
+    setNotice(null)
 
     try {
       let job = await deleteHistory()
@@ -49,7 +69,25 @@ export function DeleteHistory({
         job = await getJob(job.job_id)
       }
 
-      if (job.state === "failed") {
+      const result = isDeleteHistoryResult(job.result)
+        ? job.result
+        : null
+
+      if (
+        job.state === "failed" &&
+        result?.local === "complete"
+      ) {
+        // Local history is gone; only the cloud copy is
+        // unconfirmed, so this is a pending state rather
+        // than a deletion failure.
+        setNotice(
+          "Local history was deleted. Cloud deletion could not be confirmed and remains pending; run Delete History again to retry."
+        )
+        onDeleted()
+        return
+      }
+
+      if (job.state !== "complete") {
         throw new Error("History deletion failed")
       }
 
@@ -62,12 +100,16 @@ export function DeleteHistory({
       )
     } finally {
       setIsDeleting(false)
+      setDialogOpen(false)
     }
   }
 
   return (
     <div className="space-y-2">
-      <AlertDialog>
+      <AlertDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      >
         <AlertDialogTrigger asChild>
           <Button variant="destructive">
             Delete History
@@ -105,6 +147,15 @@ export function DeleteHistory({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {notice && (
+        <p
+          className="text-sm text-muted-foreground"
+          role="status"
+        >
+          {notice}
+        </p>
+      )}
 
       {error && (
         <p className="text-sm text-destructive">

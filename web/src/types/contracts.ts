@@ -197,6 +197,12 @@ export interface SummaryResult {
   query_id: string | null
 }
 
+export interface DeleteHistoryResult {
+  local: "complete"
+  atlas: "complete" | "pending"
+  snowflake: "complete" | "pending"
+}
+
 export interface DeleteHistoryRequest {
   schema_version: 1
   request_id: string
