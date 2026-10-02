@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import sqlite3
 import time
+import uuid
 
 
 class EventStore:
@@ -131,6 +132,11 @@ class EventStore:
             db.execute("UPDATE events SET acknowledged_at = ? WHERE event_id = ?", (now, event_id))
         return format_epoch_utc(now), True
 
+    def clear_history(self):
+        """Delete every stored event (local history privacy control)."""
+        with self.connection() as db:
+            return db.execute("DELETE FROM events").rowcount
+
 
 DEFAULT_COOLDOWN_SECONDS = 10
 
@@ -227,6 +233,54 @@ class SettingsStore:
                 values,
             )
         return self.get()
+
+
+class DeviceStore:
+    """Minimal persistent device metadata: analytics identity and policy epoch.
+
+    The analytics device ID is independent of any profile or user ID and is the
+    only key the Snowflake adapter receives. The policy epoch advances whenever
+    external consent changes or history is deleted (architecture plan 5.6).
+    """
+
+    def __init__(self, path):
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.connection() as db:
+            db.execute("""CREATE TABLE IF NOT EXISTS device_meta (
+                key TEXT PRIMARY KEY, value TEXT NOT NULL
+            )""")
+
+    @contextmanager
+    def connection(self):
+        with closing(sqlite3.connect(self.path, timeout=5)) as db:
+            with db:
+                yield db
+
+    def _read(self, db, key):
+        row = db.execute("SELECT value FROM device_meta WHERE key = ?", (key,)).fetchone()
+        return row[0] if row else None
+
+    def analytics_device_id(self):
+        with self.connection() as db:
+            # INSERT OR IGNORE keeps one persistent ID even under races.
+            db.execute(
+                "INSERT OR IGNORE INTO device_meta (key, value) VALUES ('analytics_device_id', ?)",
+                (str(uuid.uuid4()),),
+            )
+            return self._read(db, "analytics_device_id")
+
+    def policy_epoch(self):
+        with self.connection() as db:
+            db.execute("INSERT OR IGNORE INTO device_meta (key, value) VALUES ('policy_epoch', '0')")
+            return int(self._read(db, "policy_epoch"))
+
+    def advance_policy_epoch(self):
+        with self.connection() as db:
+            db.execute("INSERT OR IGNORE INTO device_meta (key, value) VALUES ('policy_epoch', '0')")
+            current = int(self._read(db, "policy_epoch"))
+            db.execute("UPDATE device_meta SET value = ? WHERE key = 'policy_epoch'", (str(current + 1),))
+        return current + 1
 
 
 def format_epoch_utc(value):

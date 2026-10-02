@@ -21,6 +21,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from changes import ChangeBuffer
 from classifier import SoundClassifier
 from audio_processing import prepare_wav
+from analytics import AnalyticsError, AnalyticsService
 from events import create_event, format_utc
 from ingest import (
     CHUNK_BYTES,
@@ -32,10 +33,11 @@ from ingest import (
     chunk_age_seconds,
     parse_chunk,
 )
+from jobs import JobConflict, JobFailure, JobRegistry
 from pipeline import DetectionPipeline
 from playback import PlaybackConflict, PlaybackRegistry
 from speech import LABEL_TEMPLATES, SpeechError, SpeechService
-from storage import EventStore, SettingsStore
+from storage import DeviceStore, EventStore, SettingsStore
 from uploads import read_wav_upload
 
 
@@ -140,7 +142,7 @@ async def finish_in_thread(function, *args):
 
 
 def create_app(classifier_factory=SoundClassifier, db_path=None, capture_token=None,
-               speech_service=None, playback_registry=None):
+               speech_service=None, playback_registry=None, analytics_service=None):
     @asynccontextmanager
     async def lifespan(app):
         app.state.classifier = None
@@ -151,7 +153,14 @@ def create_app(classifier_factory=SoundClassifier, db_path=None, capture_token=N
         retention_days = int(os.environ.get("RETENTION_DAYS", "1"))
         app.state.store = EventStore(path, retention_days=retention_days)
         app.state.settings_store = SettingsStore(path, retention_days=retention_days)
+        app.state.device = DeviceStore(path)
         app.state.changes = ChangeBuffer()
+        app.state.jobs = JobRegistry(app.state.changes)
+        app.state.analytics = (
+            AnalyticsService.from_env(app.state.device.analytics_device_id())
+            if analytics_service is None
+            else (analytics_service or None)
+        )
         app.state.registry = CaptureRegistry()
         app.state.playback = playback_registry or PlaybackRegistry()
         app.state.speech = speech_service or SpeechService.from_env()
@@ -254,6 +263,20 @@ def create_app(classifier_factory=SoundClassifier, db_path=None, capture_token=N
         request_id: uuid.UUID
         state: Literal["started", "ended"]
         playback_id: uuid.UUID
+
+    class SummaryRequest(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        schema_version: Literal[1]
+        request_id: uuid.UUID
+        lookback_minutes: int = Field(ge=5, le=60)
+
+    class DeleteHistoryRequest(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        schema_version: Literal[1]
+        request_id: uuid.UUID
+        scope: Literal["all_history"]
 
     def require_capture_token(request: Request):
         expected = getattr(request.app.state, "capture_token", "")
@@ -531,6 +554,85 @@ def create_app(classifier_factory=SoundClassifier, db_path=None, capture_token=N
             return {"events": app.state.store.get_events()}
         except sqlite3.Error as error:
             raise HTTPException(503, "Local history is unavailable.") from error
+
+    def start_analytics_job(job, work):
+        """Run optional Snowflake work as a sanitized background job."""
+
+        def run():
+            service = app.state.analytics
+            if service is None:
+                raise JobFailure(
+                    "DEPENDENCY_UNAVAILABLE",
+                    True,
+                    "Snowflake analytics is not configured in the local service.",
+                )
+            try:
+                return work(service)
+            except AnalyticsError as error:
+                raise JobFailure(error.code, error.retryable, error.message) from None
+
+        app.state.jobs.start(job["job_id"], run)
+
+    def perform_delete(job_id):
+        state = app.state
+        # Old event changes must not replay deleted history to the dashboard.
+        state.changes.clear()
+        state.store.clear_history()
+        state.device.advance_policy_epoch()
+        updated = state.settings_store.update({
+            "cloud_storage_enabled": False,
+            "analytics_enabled": False,
+            "speech_enabled": False,
+        })
+        state.changes.append("settings.changed", {"settings": settings_payload(updated)})
+        # This build has no MongoDB Atlas integration, so no event metadata was
+        # ever uploaded there; the atlas leg is complete by construction.
+        result = {"local": "complete", "atlas": "complete", "snowflake": "complete"}
+        state.changes.append("history.cleared", {"deletion_id": job_id})
+        service = state.analytics
+        if service is not None:
+            try:
+                service.delete_events()
+            except AnalyticsError as error:
+                result["snowflake"] = "pending"
+                raise JobFailure(error.code, error.retryable, error.message, result=result) from None
+        return result
+
+    @app.post("/v1/summary", status_code=202)
+    def request_summary(body: SummaryRequest):
+        state = app.state
+        if not state.settings_store.get().analytics_enabled:
+            raise ApiError(403, "FORBIDDEN", "Analytics is disabled in settings.")
+        try:
+            job, created = state.jobs.create("summary", str(body.request_id))
+        except JobConflict as conflict:
+            raise ApiError(conflict.status_code, conflict.code, conflict.message, conflict.retryable) from None
+        if created:
+            lookback = body.lookback_minutes
+            start_analytics_job(job, lambda service: service.summarize(lookback))
+        return job
+
+    @app.post("/v1/privacy/delete", status_code=202)
+    def delete_history(body: DeleteHistoryRequest):
+        state = app.state
+        try:
+            job, created = state.jobs.create("delete", str(body.request_id))
+        except JobConflict as conflict:
+            raise ApiError(conflict.status_code, conflict.code, conflict.message, conflict.retryable) from None
+        if created:
+            state.jobs.start(job["job_id"], lambda: perform_delete(job["job_id"]))
+        return job
+
+    @app.get("/v1/jobs/{job_id}")
+    def get_job(job_id: str):
+        try:
+            validated = str(uuid.UUID(job_id))
+        except ValueError:
+            raise ApiError(422, "SCHEMA_INVALID", "job_id must be a UUID.") from None
+        job = app.state.jobs.get(validated)
+        if job is None:
+            raise ApiError(404, "NOT_FOUND", "Unknown job.")
+        return job
 
     dist_dir = Path(__file__).resolve().parent.parent / "web" / "dist"
     if dist_dir.is_dir():

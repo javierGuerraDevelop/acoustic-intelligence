@@ -39,3 +39,9 @@ class ChangeBuffer:
             changes = [change for change in self._changes if change["cursor"] > after][:MAX_RETURNED]
             cursor = changes[-1]["cursor"] if changes else self._cursor
             return changes, cursor, False
+
+    def clear(self):
+        """Drop pending changes and restart cursor numbering from zero."""
+        with self._lock:
+            self._changes.clear()
+            self._cursor = 0

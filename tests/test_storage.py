@@ -2,10 +2,11 @@ from datetime import datetime, timezone
 import json
 import subprocess
 import sys
+import uuid
 
 import pytest
 
-from storage import EventStore
+from storage import DeviceStore, EventStore
 
 
 def event(event_id="one", timestamp=1000000):
@@ -52,3 +53,26 @@ def test_shortening_retention_applies_to_existing_events(tmp_path):
     path = tmp_path / "events.sqlite3"
     EventStore(path, retention_days=7, clock=lambda: 1000000).save_event(event())
     assert EventStore(path, retention_days=1, clock=lambda: 1000000 + 86400).get_events() == []
+
+
+def test_clear_history_removes_every_event(tmp_path):
+    store = EventStore(tmp_path / "events.sqlite3", clock=lambda: 1000000)
+    store.save_event(event("one"), kind="live")
+    store.save_event(event("two"))
+    assert store.clear_history() == 2
+    assert store.get_events() == []
+    items, next_cursor = store.get_live_events()
+    assert items == []
+    assert next_cursor is None
+
+
+def test_device_store_persists_analytics_id_and_policy_epoch(tmp_path):
+    path = tmp_path / "events.sqlite3"
+    store = DeviceStore(path)
+    device_id = store.analytics_device_id()
+    assert uuid.UUID(device_id)
+    assert store.analytics_device_id() == device_id
+    assert DeviceStore(path).analytics_device_id() == device_id
+    assert store.policy_epoch() == 0
+    assert store.advance_policy_epoch() == 1
+    assert DeviceStore(path).policy_epoch() == 1
