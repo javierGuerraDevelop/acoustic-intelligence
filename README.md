@@ -446,6 +446,22 @@ From `aiAudio_Processing`:
 
 The Python suite uses fake classifiers; it does not need YAMNet or `MODEL_DIR`, and CI runs it the same way.
 
+### Cloud analytics
+
+The Snowflake adapter has its own dependency set and unit suite (DB-API fakes, no live account needed). From the repository root:
+
+```bash
+python3 -m venv build/venv-analytics
+build/venv-analytics/bin/python -m pip install -r cloud/analytics/requirements-analytics.lock
+build/venv-analytics/bin/python -m unittest discover -s cloud/analytics/tests -t .
+```
+
+```powershell
+python -m venv build\venv-analytics
+.\build\venv-analytics\Scripts\python.exe -m pip install -r cloud\analytics\requirements-analytics.lock
+.\build\venv-analytics\Scripts\python.exe -m unittest discover -s cloud\analytics\tests -t .
+```
+
 ### Frontend
 
 From `web`:
@@ -482,7 +498,7 @@ python tests\capture\integration_check.py --exe build\capture\bin\radar_capture.
 python tests\capture\integration_check.py --exe build\capture\bin\radar_capture.exe --scenario stall
 ```
 
-All three suites run in GitHub Actions on every push to `main` and every pull request — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Additional capture details are documented in [`capture/README.md`](capture/README.md).
+All four suites run in GitHub Actions on every push to `main` and every pull request — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Additional capture details are documented in [`capture/README.md`](capture/README.md).
 
 ## Privacy design
 
