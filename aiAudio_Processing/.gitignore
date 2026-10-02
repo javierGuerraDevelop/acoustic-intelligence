@@ -83,3 +83,9 @@ Thumbs.db
 *.wav
 *.raw
 recordings/
+
+# ---- Downloaded model / local runtime data ----
+# YAMNet is downloaded per machine by scripts/download_model.py.
+models/
+data/
+*.sqlite3

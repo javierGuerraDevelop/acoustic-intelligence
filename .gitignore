@@ -83,3 +83,9 @@ Thumbs.db
 *.wav
 *.raw
 recordings/
+
+# ---- Downloaded model / local runtime data ----
+# YAMNet is downloaded per machine by aiAudio_Processing/scripts/download_model.py.
+aiAudio_Processing/models/
+aiAudio_Processing/data/
+*.sqlite3
