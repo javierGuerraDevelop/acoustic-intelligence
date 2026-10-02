@@ -391,7 +391,23 @@ export async function requestSummary(): Promise<Job> {
       window.setTimeout(resolve, 500)
     );
 
-    return mockJob("summary");
+    return mockJob("summary", "complete", {
+      text:
+        "Two possible knocking detections were counted. " +
+        "They are possible detections, not confirmed visits; " +
+        "review their timestamps.",
+      event_count: 2,
+      counts: { knock: 2 },
+      since: new Date(
+        Date.now() - 30 * 60 * 1000
+      ).toISOString(),
+      through: new Date(
+        Date.now() - 5 * 60 * 1000
+      ).toISOString(),
+      generated_at: new Date().toISOString(),
+      model: "llama3.3-70b",
+      query_id: "mock-query-0001",
+    });
   }
 
   const response = await fetch(

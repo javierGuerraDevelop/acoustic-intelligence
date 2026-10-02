@@ -50,6 +50,7 @@ function App() {
     isGenerating: isGeneratingSummary,
     error: summaryError,
     lastGeneratedAt,
+    summary,
   } = useActivitySummary();
 
   const events = historyItems.map((item) => item.event);
@@ -159,8 +160,12 @@ function App() {
         )}
 
         <ActivitySummary
+          analyticsEnabled={
+            settings?.analytics_enabled ?? false
+          }
           isGenerating={isGeneratingSummary}
           lastGeneratedAt={lastGeneratedAt}
+          summary={summary}
           error={summaryError}
           onGenerate={() => {
             void generateSummary();

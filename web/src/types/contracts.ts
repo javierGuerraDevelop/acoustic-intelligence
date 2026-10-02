@@ -170,14 +170,31 @@ export type JobKind = "delete" | "summary"
 
 export type JobState = "pending" | "running" | "complete" | "failed"
 
-export interface Job {
+export interface JobError {
+  code: string
+  retryable: boolean
+  message: string
+}
+
+export interface Job<TResult = unknown> {
   schema_version: number
   job_id: string
   kind: JobKind
   state: JobState
   updated_at: string
-  result: unknown
-  error: unknown
+  result: TResult | null
+  error: JobError | null
+}
+
+export interface SummaryResult {
+  text: string
+  event_count: number
+  counts: Partial<Record<EventLabel, number>>
+  since: string
+  through: string
+  generated_at: string
+  model: string | null
+  query_id: string | null
 }
 
 export interface DeleteHistoryRequest {
